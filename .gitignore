@@ -3,7 +3,6 @@ node_modules/
 venv/
 .venv/
 env/
-package-lock.json
 
 # Environment and secrets
 .env*
