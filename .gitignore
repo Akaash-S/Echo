@@ -1,8 +1,35 @@
+# Dependencies
 node_modules/
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Build / output
 build/
 dist/
 coverage/
-.DS_Store
-*.log
+*.tsbuildinfo
+
+# Environment and secrets
 .env*
 !.env.example
+*.pem
+service-account.json
+*-firebase-adminsdk-*.json
+
+# Logs and OS
+*.log
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
