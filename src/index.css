@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  h1, h2, h3, .font-serif {
+    font-family: 'Fraunces', Georgia, serif;
+  }
+}
+
+.markdown-body {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.markdown-body p {
+  margin-bottom: 0.75rem;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body ul, .markdown-body ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+}
+
+.markdown-body li {
+  margin-bottom: 0.25rem;
+}
+
+.markdown-body strong {
+  color: #fef3c7;
+  font-weight: 600;
+}
+
+.markdown-body em {
+  font-style: italic;
+  color: #fde68a;
+}
+
+.markdown-body blockquote {
+  border-left: 3px solid #f59e0b;
+  padding-left: 0.75rem;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-style: italic;
+  color: #d6d3d1;
+}
+

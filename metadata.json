@@ -1,0 +1,6 @@
+{
+  "name": "Echo",
+  "description": "A secure, authenticated personal AI journal with contextual callbacks and proactive reflections.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
