@@ -2,9 +2,12 @@ import { JournalSession, StartSessionResponse, MessageSessionResponse, EndSessio
 
 export class EchoApiClient {
   private token: string;
+  private baseUrl: string;
 
   constructor(token: string) {
     this.token = token;
+    const meta = import.meta as any;
+    this.baseUrl = (meta && meta.env && meta.env.VITE_API_URL) || '';
   }
 
   setToken(token: string) {
@@ -16,20 +19,29 @@ export class EchoApiClient {
     headers.set('Authorization', `Bearer ${this.token}`);
     headers.set('Content-Type', 'application/json');
 
-    const res = await fetch(endpoint, {
+    const res = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers,
     });
 
+    const contentType = res.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+
     if (!res.ok) {
       let errMessage = `HTTP error ${res.status}`;
-      try {
-        const errorJson = await res.json();
-        errMessage = errorJson.error || errorJson.message || errMessage;
-      } catch {
-        // fallback to status text
+      if (isJson) {
+        try {
+          const errorJson = await res.json();
+          errMessage = errorJson.detail || errorJson.error || errorJson.message || errMessage;
+        } catch {
+          // fallback
+        }
       }
       throw new Error(errMessage);
+    }
+
+    if (!isJson) {
+      throw new Error(`Expected JSON response but received ${contentType || 'HTML'}`);
     }
 
     return res.json() as Promise<T>;
@@ -62,15 +74,5 @@ export class EchoApiClient {
 
   async getSession(sessionId: string): Promise<{ session: JournalSession }> {
     return this.fetchWithAuth<{ session: JournalSession }>(`/api/session/${sessionId}`);
-  }
-
-  async deleteSession(sessionId: string): Promise<{ success: boolean }> {
-    return this.fetchWithAuth<{ success: boolean }>(`/api/session/${sessionId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async getSecurityAudit(): Promise<any> {
-    return this.fetchWithAuth<any>('/api/security/audit');
   }
 }

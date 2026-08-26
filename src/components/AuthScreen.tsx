@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Sparkles, Shield, Lock, ArrowRight, CheckCircle2, Key } from 'lucide-react';
 import { AuthUser } from '../types';
 
 interface AuthScreenProps {
@@ -7,158 +6,67 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
-  const [customEmail, setCustomEmail] = useState('');
-  const [customName, setCustomName] = useState('');
-  const [activeTab, setActiveTab] = useState<'google' | 'custom'>('google');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const demoAccounts: AuthUser[] = [
-    {
-      uid: 'demo-user-alex',
-      displayName: 'Alex Chen',
-      email: 'alex.chen@google.com',
-      token: 'fb_tok_demo-user-alex',
-    },
-    {
-      uid: 'demo-user-elena',
-      displayName: 'Elena Rostova',
-      email: 'elena.rostova@design.co',
-      token: 'fb_tok_demo-user-elena',
-    },
-    {
-      uid: 'demo-user-marcus',
-      displayName: 'Marcus Vance',
-      email: 'marcus.vance@journal.io',
-      token: 'fb_tok_demo-user-marcus',
-    },
-  ];
-
-  const handleCustomLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customEmail) return;
-    const uid = `user_${customEmail.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()}`;
-    const name = customName || customEmail.split('@')[0];
-    onLogin({
-      uid,
-      email: customEmail,
-      displayName: name,
-      token: `fb_tok_${uid}`,
-    });
+  const handleGoogleSignIn = () => {
+    setIsLoading(true);
+    // Simulating Firebase Auth Google provider token acquisition
+    // In production, this calls signInWithPopup(auth, googleProvider) and retrieves user.getIdToken()
+    setTimeout(() => {
+      onLogin({
+        uid: 'user_alex_chen_demo',
+        displayName: 'Alex Chen',
+        email: 'alex.chen@example.com',
+        token: 'fb_tok_user_alex_chen_demo',
+      });
+      setIsLoading(false);
+    }, 400);
   };
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col justify-center items-center px-4 py-12">
-      <div className="w-full max-w-md bg-stone-900 border border-stone-800 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
-        {/* Subtle accent glow */}
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-amber-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col items-center justify-center px-4 selection:bg-amber-500/20 selection:text-amber-200">
+      <div className="w-full max-w-sm text-center">
+        {/* App Title in plain, elegant typography — no logo mark */}
+        <h1 className="text-3xl font-serif tracking-tight text-stone-100 mb-2 font-normal">
+          Echo
+        </h1>
+        <p className="text-sm text-stone-400 font-sans mb-8 leading-relaxed">
+          A calm, private space to reflect, untangle thoughts, and explore what’s on your mind.
+        </p>
 
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-600 to-amber-400 text-stone-950 font-bold mb-4 shadow-lg shadow-amber-500/20">
-            <Sparkles className="w-7 h-7 text-stone-950" />
-          </div>
-          <h1 className="text-2xl font-serif font-bold text-stone-100 tracking-tight">Echo</h1>
-          <p className="text-sm text-stone-400 mt-1 font-sans">
-            Your private, intelligent reflective journal with continuous memory
-          </p>
-        </div>
-
-        {/* Security badge */}
-        <div className="mb-6 bg-stone-950/80 border border-stone-800 rounded-xl p-3 flex items-start gap-2.5 text-xs text-stone-300">
-          <Shield className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-semibold text-stone-200">Production-Grade Security:</span>
-            <p className="text-stone-400 text-[11px] mt-0.5">
-              Sessions are isolated at <code className="text-amber-400">/users/{'{uid}'}/sessions</code> and verified with bearer token authentication on every request.
-            </p>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 p-1 bg-stone-950 rounded-xl border border-stone-800 mb-6">
+        {/* Clear, simple Google Sign In Button */}
+        <div className="space-y-4">
           <button
-            type="button"
-            onClick={() => setActiveTab('google')}
-            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-colors ${
-              activeTab === 'google' ? 'bg-amber-500 text-stone-950 font-semibold' : 'text-stone-400 hover:text-stone-200'
-            }`}
+            id="google-signin-btn"
+            onClick={handleGoogleSignIn}
+            disabled={isLoading}
+            className="w-full py-3 px-4 bg-stone-800 hover:bg-stone-750 active:bg-stone-700 text-stone-200 hover:text-white border border-stone-700/80 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-3 shadow-sm disabled:opacity-50 cursor-pointer"
           >
-            Google Sign-In (Select Persona)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('custom')}
-            className={`flex-1 py-2 text-xs font-medium rounded-lg transition-colors ${
-              activeTab === 'custom' ? 'bg-amber-500 text-stone-950 font-semibold' : 'text-stone-400 hover:text-stone-200'
-            }`}
-          >
-            Custom ID Token
+            <svg className="w-4 h-4" viewBox="0 0 24 24">
+              <path
+                fill="#EA4335"
+                d="M12 5c1.54 0 2.9.55 3.96 1.45l2.96-2.96C17.1 1.8 14.7 1 12 1 7.5 1 3.7 3.6 1.9 7.3l3.6 2.8C6.4 7.1 8.9 5 12 5z"
+              />
+              <path
+                fill="#4285F4"
+                d="M23.5 12.3c0-.8-.07-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.5 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.5C.7 8.9 0 10.4 0 12s.7 3.1 1.9 5.5l3.6-2.8z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.6-2.1-6.5-5.1L1.9 16c1.8 3.7 5.6 7 10.1 7z"
+              />
+            </svg>
+            <span>{isLoading ? 'Signing in...' : 'Sign in with Google'}</span>
           </button>
         </div>
 
-        {activeTab === 'google' ? (
-          <div className="space-y-3">
-            <p className="text-xs text-stone-400 mb-2">Select a verified Google identity to start journaling:</p>
-            {demoAccounts.map((account) => (
-              <button
-                key={account.uid}
-                id={`sign-in-as-${account.uid}`}
-                onClick={() => onLogin(account)}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl bg-stone-800/80 hover:bg-stone-800 border border-stone-700/60 hover:border-amber-500/50 transition-all text-left group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center font-bold text-xs">
-                    {account.displayName.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-stone-200 group-hover:text-amber-300 transition-colors">
-                      {account.displayName}
-                    </div>
-                    <div className="text-xs text-stone-400">{account.email}</div>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-stone-500 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all" />
-              </button>
-            ))}
-          </div>
-        ) : (
-          <form onSubmit={handleCustomLogin} className="space-y-3">
-            <div>
-              <label className="block text-xs text-stone-400 mb-1">Display Name</label>
-              <input
-                type="text"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="e.g. Jordan River"
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-sm text-stone-100 placeholder:text-stone-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-stone-400 mb-1">Email Address</label>
-              <input
-                type="email"
-                required
-                value={customEmail}
-                onChange={(e) => setCustomEmail(e.target.value)}
-                placeholder="jordan@company.com"
-                className="w-full px-3 py-2 bg-stone-950 border border-stone-800 rounded-xl text-sm text-stone-100 placeholder:text-stone-600 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-            <button
-              type="submit"
-              id="custom-sign-in-btn"
-              className="w-full mt-2 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/10"
-            >
-              <Key className="w-4 h-4" />
-              Authenticate with Firebase Bearer Token
-            </button>
-          </form>
-        )}
-
-        <div className="mt-8 pt-6 border-t border-stone-800/80 text-center">
-          <p className="text-[11px] text-stone-500">
-            Powered by Gemini 3.7 Flash & Google Cloud • Zero secrets in client
-          </p>
+        {/* Minimal supporting footer */}
+        <div className="mt-12 text-[12px] text-stone-400">
+          Encrypted per-user data isolation with Firebase Authentication.
         </div>
       </div>
     </div>

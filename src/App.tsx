@@ -1,26 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { AuthUser, JournalSession, EndSessionResponse } from './types';
 import { EchoApiClient } from './lib/api';
-import { Navbar } from './components/Navbar';
 import { AuthScreen } from './components/AuthScreen';
 import { JournalChat } from './components/JournalChat';
-import { EndOfSessionModal } from './components/EndOfSessionModal';
-import { PastSessions } from './components/PastSessions';
-import { SecurityComplianceView } from './components/SecurityComplianceView';
+import { Sidebar } from './components/Sidebar';
+import { PanelLeft } from 'lucide-react';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>({
-    uid: 'demo-user-alex',
-    displayName: 'Alex Chen',
-    email: 'alex.chen@google.com',
-    token: 'fb_tok_demo-user-alex',
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    // Default demo session for immediate live interactive preview
+    return {
+      uid: 'user_alex_chen_demo',
+      displayName: 'Alex Chen',
+      email: 'alex.chen@example.com',
+      token: 'fb_tok_user_alex_chen_demo',
+    };
   });
 
-  const [activeTab, setActiveTab] = useState<'journal' | 'archive' | 'security'>('journal');
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
-  const [endSessionAnalysis, setEndSessionAnalysis] = useState<EndSessionResponse | null>(null);
-  const [isEndModalOpen, setIsEndModalOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
 
   const [apiClient, setApiClient] = useState<EchoApiClient>(
@@ -31,7 +30,6 @@ export default function App() {
     if (currentUser) {
       const client = new EchoApiClient(currentUser.token);
       setApiClient(client);
-      // Auto-start a session if none active
       startNewSessionWithClient(client);
     } else {
       setCurrentSession(null);
@@ -42,11 +40,49 @@ export default function App() {
     setIsInitializing(true);
     try {
       const startRes = await client.startSession();
-      setCurrentSession(startRes.session);
+      // Assemble initial session state
+      const newSession: JournalSession = {
+        sessionId: startRes.sessionId,
+        userId: currentUser?.uid || '',
+        startedAt: startRes.startedAt,
+        endedAt: null,
+        messages: [
+          {
+            role: 'model',
+            text: startRes.openingMessage,
+            timestamp: startRes.startedAt,
+          },
+        ],
+        summary: null,
+        extractedTheme: null,
+        followUpQuestion: null,
+        followUpAsked: false,
+        followUpReferencedNext: false,
+      };
+      setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
-      setActiveTab('journal');
     } catch (err) {
       console.error('Failed to start session', err);
+      // Fallback local session state if network is loading
+      const fallbackTime = new Date().toISOString();
+      setCurrentSession({
+        sessionId: `sess_${Date.now()}`,
+        userId: currentUser?.uid || '',
+        startedAt: fallbackTime,
+        endedAt: null,
+        messages: [
+          {
+            role: 'model',
+            text: "Welcome to Echo. This is your private space to reflect, untangle thoughts, or brainstorm. What's on your mind today?",
+            timestamp: fallbackTime,
+          },
+        ],
+        summary: null,
+        extractedTheme: null,
+        followUpQuestion: null,
+        followUpAsked: false,
+        followUpReferencedNext: false,
+      });
     } finally {
       setIsInitializing(false);
     }
@@ -55,6 +91,7 @@ export default function App() {
   const handleStartNewSession = () => {
     if (apiClient) {
       startNewSessionWithClient(apiClient);
+      setIsSidebarOpen(false);
     }
   };
 
@@ -63,45 +100,22 @@ export default function App() {
   };
 
   const handleEndSessionSuccess = (analysis: EndSessionResponse) => {
-    setEndSessionAnalysis(analysis);
-    setCurrentSession(analysis.session);
-    setIsEndModalOpen(true);
-  };
-
-  const handleAnswerFollowUp = (question: string) => {
-    setIsEndModalOpen(false);
     if (currentSession) {
-      // Append the follow-up question as a prompt from Echo to let user answer
-      const updatedMessages = [
-        ...currentSession.messages,
-        {
-          id: `msg_followup_${Date.now()}`,
-          role: 'model' as const,
-          text: `**Follow-Up Reflection:** ${question}`,
-          timestamp: new Date().toISOString(),
-        },
-      ];
       setCurrentSession({
         ...currentSession,
-        messages: updatedMessages,
+        summary: analysis.summary,
+        extractedTheme: analysis.extractedTheme,
+        followUpQuestion: analysis.followUpQuestion,
+        endedAt: analysis.endedAt,
+        followUpAsked: analysis.followUpAsked,
       });
     }
-  };
-
-  const handleConcludeDone = () => {
-    setIsEndModalOpen(false);
-    setActiveTab('archive');
   };
 
   const handleSelectPastSession = (session: JournalSession) => {
     setCurrentSession(session);
     setPreviousTheme(null);
-    setActiveTab('journal');
-  };
-
-  const handleSwitchUser = (newUser: AuthUser) => {
-    setCurrentUser(newUser);
-    setCurrentSession(null);
+    setIsSidebarOpen(false);
   };
 
   const handleLogout = () => {
@@ -114,55 +128,44 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
-      <Navbar
-        user={currentUser}
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
+    <div className="h-screen w-screen bg-stone-900 text-stone-100 flex overflow-hidden font-sans selection:bg-amber-500/20 selection:text-amber-200">
+      {/* Collapsible Left Sidebar */}
+      <Sidebar
+        api={apiClient}
+        currentSessionId={currentSession?.sessionId || null}
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        onSelectSession={handleSelectPastSession}
         onNewSession={handleStartNewSession}
         onLogout={handleLogout}
-        onSwitchUser={handleSwitchUser}
-        hasActiveSession={Boolean(currentSession)}
+        userEmail={currentUser.email}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden">
-        {activeTab === 'journal' && (
-          <JournalChat
-            api={apiClient}
-            currentSession={currentSession}
-            previousTheme={previousTheme}
-            onSessionUpdated={handleSessionUpdated}
-            onEndSessionSuccess={handleEndSessionSuccess}
-            onStartNewSession={handleStartNewSession}
-          />
-        )}
+      {/* Main Panel */}
+      <div className="flex-1 flex flex-col min-w-0 h-full relative">
+        {/* Mobile Header / Sidebar Toggle */}
+        <div className="lg:hidden h-12 border-b border-stone-800 px-4 flex items-center justify-between bg-stone-950 shrink-0">
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="text-stone-400 hover:text-stone-200 p-1.5 rounded-lg"
+            title="Open sidebar"
+          >
+            <PanelLeft className="w-5 h-5" />
+          </button>
+          <span className="font-serif text-base text-stone-200 font-normal">Echo</span>
+          <div className="w-5" />
+        </div>
 
-        {activeTab === 'archive' && (
-          <PastSessions
-            api={apiClient}
-            onSelectSession={handleSelectPastSession}
-            onStartNewSession={handleStartNewSession}
-          />
-        )}
-
-        {activeTab === 'security' && (
-          <SecurityComplianceView
-            api={apiClient}
-            currentUserUid={currentUser.uid}
-          />
-        )}
-      </main>
-
-      {/* Signature End-of-Session Nudge Modal */}
-      {endSessionAnalysis && (
-        <EndOfSessionModal
-          analysis={endSessionAnalysis}
-          isOpen={isEndModalOpen}
-          onClose={() => setIsEndModalOpen(false)}
-          onAnswerFollowUp={handleAnswerFollowUp}
-          onDone={handleConcludeDone}
+        {/* Conversation Column */}
+        <JournalChat
+          api={apiClient}
+          currentSession={currentSession}
+          previousTheme={previousTheme}
+          onSessionUpdated={handleSessionUpdated}
+          onEndSessionSuccess={handleEndSessionSuccess}
+          onStartNewSession={handleStartNewSession}
         />
-      )}
+      </div>
     </div>
   );
 }

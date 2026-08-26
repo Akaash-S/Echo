@@ -1,5 +1,5 @@
 export interface JournalMessage {
-  id: string;
+  id?: string;
   role: 'user' | 'model';
   text: string;
   timestamp: string;
@@ -31,26 +31,20 @@ export interface StartSessionResponse {
   sessionId: string;
   openingMessage: string;
   previousTheme: string | null;
-  session: JournalSession;
+  startedAt: string;
 }
 
 export interface MessageSessionResponse {
   reply: string;
+  sessionId: string;
   messages: JournalMessage[];
 }
 
 export interface EndSessionResponse {
   summary: string;
-  extractedTheme: string;
-  followUpQuestion: string;
-  session: JournalSession;
-}
-
-export interface SecurityAuditItem {
-  id: string;
-  rule: string;
-  status: 'passed' | 'warning' | 'info';
-  details: string;
-  architectureLayer: string;
-  manualConfigRequired?: string;
+  extractedTheme: string | null;
+  followUpQuestion: string | null;
+  sessionId: string;
+  endedAt: string;
+  followUpAsked: boolean;
 }
