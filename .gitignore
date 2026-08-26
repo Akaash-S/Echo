@@ -1,41 +1,8 @@
-# Dependencies
 node_modules/
-venv/
-.venv/
-env/
-
-# Environment and secrets
+build/
+dist/
+coverage/
+.DS_Store
+*.log
 .env*
 !.env.example
-service-account.json
-*-service-account.json
-*.pem
-*.p12
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-
-# Build and tooling
-dist/
-build/
-coverage/
-*.tsbuildinfo
-.vite/
-.turbo/
-
-# Logs and OS
-*.log
-.DS_Store
-Thumbs.db
-
-# Editors
-.idea/
-.vscode/
-*.swp
-*.swo
