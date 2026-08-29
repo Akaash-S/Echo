@@ -1,10 +1,17 @@
 import os
 import json
+import logging
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from fastapi import HTTPException, status
+
+logger = logging.getLogger("echo.gemini")
+logging.basicConfig(level=logging.INFO)
+
+# Model configuration with environment variable override
+DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
 _client: Optional[genai.Client] = None
 
@@ -61,6 +68,7 @@ def generate_opening_prompt(previous_theme: Optional[str] = None) -> str:
     - Generic warm opener: If no previous theme exists (first session), invites open reflection.
     """
     client = get_gemini_client()
+    model_name = DEFAULT_MODEL
     
     if previous_theme and previous_theme.strip():
         user_prompt = f"""Generate a warm, natural 1-2 sentence opening message for a returning user.
@@ -71,20 +79,24 @@ Do not be intrusive or forceful; invite them to either continue that thread or e
         user_prompt = """Generate a warm, inviting 1-2 sentence opening greeting welcoming the user to their journaling session.
 Invite them to share whatever thought, feeling, idea, or challenge is taking up space in their mind today without pressure."""
 
+    print(f"[Gemini API Call] Invoking model '{model_name}' for opening prompt (previous_theme={previous_theme!r})...")
+    logger.info(f"Invoking Gemini model {model_name} for opening prompt (theme={previous_theme})")
+
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model_name,
             contents=user_prompt,
             config=types.GenerateContentConfig(
                 system_instruction=ECHO_SYSTEM_INSTRUCTION,
                 temperature=0.7,
-                max_output_tokens=250,
+                max_output_tokens=300,
             ),
         )
         if response.text and response.text.strip():
+            print(f"[Gemini API Response] Received opening prompt from {model_name}.")
             return response.text.strip()
     except Exception as e:
-        print(f"Error calling Gemini for opening prompt: {e}")
+        print(f"[Gemini API Error] Error calling Gemini for opening prompt: {e}")
         if previous_theme:
             return f"Welcome back! Last time you were reflecting on '{previous_theme}'. How is that sitting with you today, or is there a fresh thought on your mind?"
         return "Welcome to Echo. This is your private space to reflect, untangle thoughts, or brainstorm. What's on your mind today?"
@@ -100,6 +112,7 @@ def generate_conversation_turn(messages: List[Dict[str, Any]]) -> str:
     - Untrusted Input (§7 #4): Message texts are structured as user/model content turns.
     """
     client = get_gemini_client()
+    model_name = DEFAULT_MODEL
     
     contents: List[types.Content] = []
     
@@ -124,24 +137,28 @@ def generate_conversation_turn(messages: List[Dict[str, Any]]) -> str:
             detail="Cannot generate response from empty message history."
         )
 
+    print(f"[Gemini API Call] Invoking model '{model_name}' for conversation turn with {len(contents)} multi-turn history items...")
+    logger.info(f"Invoking Gemini model {model_name} for conversation turn (turn count: {len(contents)})")
+
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model_name,
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=ECHO_SYSTEM_INSTRUCTION,
                 temperature=0.7,
-                max_output_tokens=800,
+                max_output_tokens=1000,
             ),
         )
         
         if response.text and response.text.strip():
+            print(f"[Gemini API Response] Received conversation reply from {model_name}.")
             return response.text.strip()
         else:
             return "I'm listening closely. Could you tell me more about how that is affecting you right now?"
             
     except Exception as e:
-        print(f"Error calling Gemini for conversation turn: {e}")
+        print(f"[Gemini API Error] Error calling Gemini for conversation turn: {e}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Gemini AI generation error: {str(e)}"
@@ -157,6 +174,7 @@ def synthesize_session(messages: List[Dict[str, Any]]) -> Dict[str, str]:
     3. followUpQuestion: A thoughtful, open-ended question for between-session reflection.
     """
     client = get_gemini_client()
+    model_name = DEFAULT_MODEL
     
     # Format the session transcript into readable text for analysis
     transcript_lines = []
@@ -180,25 +198,37 @@ Transcript of the session:
 {transcript_text}
 \"\"\"
 
-Please analyze the transcript and generate:
+Analyze the transcript and generate JSON with:
 1. `summary`: A compassionate, objective 2-4 sentence narrative capturing the core thoughts, tensions, realizations, or plans the user explored.
 2. `extractedTheme`: A short 2-5 word lowercase theme tag that encapsulates the core topic/emotional thread (e.g. 'work boundary setting', 'career transition doubts', 'restoring creative energy').
 3. `followUpQuestion`: A single forward-looking, open-ended question that gently invites the user to notice how this unfolds in their daily life before their next session."""
 
+    print(f"[Gemini API Call] Invoking model '{model_name}' for session synthesis ({len(messages)} messages)...")
+    logger.info(f"Invoking Gemini model {model_name} for session synthesis")
+
     try:
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=model_name,
             contents=synthesis_prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=SessionSynthesisSchema,
-                temperature=0.4,
-                max_output_tokens=600,
+                temperature=0.3,
+                max_output_tokens=1000,
             ),
         )
         
-        raw_text = response.text or ""
+        raw_text = (response.text or "").strip()
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.startswith("```"):
+            raw_text = raw_text[3:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
         parsed = json.loads(raw_text)
+        print(f"[Gemini API Response] Successfully synthesized session with {model_name}: theme='{parsed.get('extractedTheme')}'")
         
         return {
             "summary": parsed.get("summary", "Reflective conversation exploring personal thoughts and experiences.").strip(),
@@ -206,7 +236,7 @@ Please analyze the transcript and generate:
             "followUpQuestion": parsed.get("followUpQuestion", "What is one thought or feeling from today's session you want to stay mindful of?").strip()
         }
     except Exception as e:
-        print(f"Error synthesizing session with Gemini: {e}")
+        print(f"[Gemini API Error] Error synthesizing session with Gemini: {e}")
         # Fallback structured synthesis
         return {
             "summary": "The user explored recent experiences and reflections to gain clarity.",

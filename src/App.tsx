@@ -1,49 +1,64 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebaseConfig';
 import { AuthUser, JournalSession, EndSessionResponse } from './types';
 import { EchoApiClient } from './lib/api';
 import { AuthScreen } from './components/AuthScreen';
 import { JournalChat } from './components/JournalChat';
 import { Sidebar } from './components/Sidebar';
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, Loader2 } from 'lucide-react';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
-    // Default demo session for immediate live interactive preview
-    return {
-      uid: 'user_alex_chen_demo',
-      displayName: 'Alex Chen',
-      email: 'alex.chen@example.com',
-      token: 'fb_tok_user_alex_chen_demo',
-    };
-  });
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(true);
 
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [isInitializingSession, setIsInitializingSession] = useState(false);
 
   const [apiClient, setApiClient] = useState<EchoApiClient>(
-    () => new EchoApiClient(currentUser?.token || '')
+    () => new EchoApiClient('')
   );
 
+  // Monitor Firebase Authentication State
   useEffect(() => {
-    if (currentUser) {
-      const client = new EchoApiClient(currentUser.token);
-      setApiClient(client);
-      startNewSessionWithClient(client);
-    } else {
-      setCurrentSession(null);
-    }
-  }, [currentUser?.uid]);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          const authUser: AuthUser = {
+            uid: firebaseUser.uid,
+            displayName: firebaseUser.displayName || 'Journaler',
+            email: firebaseUser.email || '',
+            photoURL: firebaseUser.photoURL || undefined,
+            token,
+          };
+          setCurrentUser(authUser);
+          const client = new EchoApiClient(token);
+          setApiClient(client);
+          await startNewSessionWithClient(client, authUser.uid);
+        } catch (err) {
+          console.error('Failed to get user token on auth state change:', err);
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+        setCurrentSession(null);
+      }
+      setIsAuthChecking(false);
+    });
 
-  const startNewSessionWithClient = async (client: EchoApiClient) => {
-    setIsInitializing(true);
+    return () => unsubscribe();
+  }, []);
+
+  const startNewSessionWithClient = async (client: EchoApiClient, uid: string) => {
+    setIsInitializingSession(true);
     try {
       const startRes = await client.startSession();
-      // Assemble initial session state
       const newSession: JournalSession = {
         sessionId: startRes.sessionId,
-        userId: currentUser?.uid || '',
+        userId: uid,
         startedAt: startRes.startedAt,
         endedAt: null,
         messages: [
@@ -62,12 +77,12 @@ export default function App() {
       setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
     } catch (err) {
-      console.error('Failed to start session', err);
-      // Fallback local session state if network is loading
+      console.error('Failed to start session with backend API', err);
+      // Fallback local initial state if backend is still starting up
       const fallbackTime = new Date().toISOString();
       setCurrentSession({
         sessionId: `sess_${Date.now()}`,
-        userId: currentUser?.uid || '',
+        userId: uid,
         startedAt: fallbackTime,
         endedAt: null,
         messages: [
@@ -84,13 +99,13 @@ export default function App() {
         followUpReferencedNext: false,
       });
     } finally {
-      setIsInitializing(false);
+      setIsInitializingSession(false);
     }
   };
 
   const handleStartNewSession = () => {
-    if (apiClient) {
-      startNewSessionWithClient(apiClient);
+    if (apiClient && currentUser) {
+      startNewSessionWithClient(apiClient, currentUser.uid);
       setIsSidebarOpen(false);
     }
   };
@@ -118,10 +133,23 @@ export default function App() {
     setIsSidebarOpen(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Error signing out:', err);
+    }
     setCurrentUser(null);
     setCurrentSession(null);
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className="h-screen w-screen bg-stone-900 text-stone-100 flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-amber-500" />
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <AuthScreen onLogin={(user) => setCurrentUser(user)} />;

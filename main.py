@@ -1,8 +1,12 @@
-from fastapi import FastAPI, Depends, status, HTTPException
+import time
+import os
+import logging
+from collections import defaultdict
+from typing import Optional, List, Dict, Any
+
+from fastapi import FastAPI, Depends, status, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
-import os
 from dotenv import load_dotenv
 
 from auth import get_verified_uid, get_verified_user
@@ -11,11 +15,41 @@ import gemini_service
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("echo.backend")
+
 app = FastAPI(
     title="Echo Backend API",
     description="Secure FastAPI backend for Echo personal AI journal with Firebase Auth, Firestore persistence, and Gemini multi-turn conversation & synthesis.",
     version="1.0.0",
 )
+
+# ---------------------------------------------------------------------------
+# Rate Limiting (In-Memory Sliding Window per UID)
+# Enforces Non-Negotiable #7 & 05-backend-spec: max 20 requests/minute per UID
+# ---------------------------------------------------------------------------
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 20
+_user_request_timestamps: Dict[str, List[float]] = defaultdict(list)
+
+def check_rate_limit(uid: str = Depends(get_verified_uid)) -> str:
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW_SECONDS
+
+    # Clean old timestamps for this user
+    timestamps = [ts for ts in _user_request_timestamps[uid] if ts > window_start]
+    
+    if len(timestamps) >= RATE_LIMIT_MAX_REQUESTS:
+        logger.warning(f"Rate limit exceeded for user: {uid}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded. Maximum {RATE_LIMIT_MAX_REQUESTS} requests per minute allowed.",
+            headers={"Retry-After": "60"},
+        )
+
+    timestamps.append(now)
+    _user_request_timestamps[uid] = timestamps
+    return uid
 
 # ---------------------------------------------------------------------------
 # CORS Configuration
@@ -28,7 +62,7 @@ allowed_origins = [
 ]
 
 frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url:
+if frontend_url and frontend_url not in allowed_origins:
     allowed_origins.append(frontend_url)
 
 app.add_middleware(
@@ -55,7 +89,7 @@ class StartSessionResponse(BaseModel):
 
 class MessageRequest(BaseModel):
     sessionId: str = Field(..., description="The unique session identifier")
-    text: str = Field(..., min_length=1, description="User's reflection or conversation turn")
+    text: str = Field(..., min_length=1, max_length=5000, description="User's reflection or conversation turn")
 
 class MessageResponse(BaseModel):
     reply: str
@@ -98,20 +132,22 @@ async def health_check():
     summary="Start a new journal session with Gemini dynamic opening prompt and theme callback",
 )
 async def start_session(
-    uid: str = Depends(get_verified_uid),
+    uid: str = Depends(check_rate_limit),
 ):
     """
     POST /api/session/start
     
-    1. Verifies Bearer token via `get_verified_uid` dependency.
+    1. Verifies Bearer token and checks rate limit.
     2. Queries Firestore for most recent session with a non-null `extractedTheme`.
     3. Calls Gemini in Python via `gemini_service.generate_opening_prompt`:
-       - If prior theme exists: generates theme callback greeting (§3.5 B).
+       - If prior theme exists: generates theme callback greeting.
        - If no prior theme: generates welcoming open-ended reflection greeting.
     4. Marks previous session's followUpReferencedNext: true (if applicable).
     5. Creates new session document under /users/{uid}/sessions/{sessionId}.
     6. Returns { sessionId, openingMessage, previousTheme, startedAt }.
     """
+    logger.info(f"[/api/session/start] Starting session for user: {uid}")
+    
     # 2. Query most recent session with extractedTheme
     recent_session = firestore_client.get_most_recent_themed_session(uid)
     previous_theme = recent_session.get("extractedTheme") if recent_session else None
@@ -147,18 +183,20 @@ async def start_session(
 )
 async def post_message(
     payload: MessageRequest,
-    uid: str = Depends(get_verified_uid),
+    uid: str = Depends(check_rate_limit),
 ):
     """
     POST /api/session/message
     
-    1. Verifies Bearer token via `get_verified_uid` dependency.
+    1. Verifies Bearer token and rate limit.
     2. Appends user message to Firestore under /users/{uid}/sessions/{sessionId}.
     3. Retrieves full session history from Firestore.
     4. Calls Gemini in Python with full conversation turns and Echo persona system prompt.
     5. Appends Gemini's reply to Firestore messages array.
     6. Returns { reply, sessionId, messages }.
     """
+    logger.info(f"[/api/session/message] Message in session {payload.sessionId} from user {uid}")
+    
     # 2. Append user reflection to Firestore (verifies session ownership)
     firestore_client.append_message(
         uid=uid,
@@ -204,7 +242,7 @@ async def end_session(
     uid: str = Depends(get_verified_uid),
 ):
     """
-    POST /api/session/end (Item 4 Gemini Synthesis)
+    POST /api/session/end
     
     1. Verifies Bearer token via `get_verified_uid` dependency.
     2. Verifies ownership and fetches full transcript of /users/{uid}/sessions/{sessionId}.
@@ -212,14 +250,11 @@ async def end_session(
        - summary (2-4 sentence narrative)
        - extractedTheme (2-5 word thematic tag)
        - followUpQuestion (open-ended question for between sessions)
-    4. Updates session document in Firestore:
-       - summary
-       - extractedTheme
-       - followUpQuestion
-       - endedAt
-       - followUpAsked: true
+    4. Updates session document in Firestore.
     5. Returns { summary, extractedTheme, followUpQuestion, sessionId, endedAt, followUpAsked }.
     """
+    logger.info(f"[/api/session/end] Ending session {payload.sessionId} for user {uid}")
+    
     # 2. Fetch full session transcript and verify ownership
     session = firestore_client.get_session(uid, payload.sessionId)
     messages_history = session.get("messages", [])
@@ -278,9 +313,15 @@ async def list_sessions(
     """
     db = firestore_client.get_db()
     sessions_ref = firestore_client._get_sessions_collection(db, uid)
-    docs = sessions_ref.order_by("startedAt", direction=firestore_client.Query.DESCENDING).stream()
-    
-    results = [doc.to_dict() for doc in docs]
+    try:
+        docs = sessions_ref.order_by("startedAt", direction=firestore_client.Query.DESCENDING).stream()
+        results = [doc.to_dict() for doc in docs]
+    except Exception as e:
+        logger.warning(f"Fallback listing sessions due to indexing: {e}")
+        docs = sessions_ref.stream()
+        results = [doc.to_dict() for doc in docs]
+        results.sort(key=lambda x: x.get("startedAt", ""), reverse=True)
+        
     return {"sessions": results}
 
 
