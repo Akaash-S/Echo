@@ -16,6 +16,7 @@ export default function App() {
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInitializingSession, setIsInitializingSession] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   const [apiClient, setApiClient] = useState<EchoApiClient>(
     () => new EchoApiClient('')
@@ -54,6 +55,7 @@ export default function App() {
 
   const startNewSessionWithClient = async (client: EchoApiClient, uid: string) => {
     setIsInitializingSession(true);
+    setSessionError(null);
     try {
       const startRes = await client.startSession();
       const newSession: JournalSession = {
@@ -76,28 +78,11 @@ export default function App() {
       };
       setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to start session with backend API', err);
-      // Fallback local initial state if backend is still starting up
-      const fallbackTime = new Date().toISOString();
-      setCurrentSession({
-        sessionId: `sess_${Date.now()}`,
-        userId: uid,
-        startedAt: fallbackTime,
-        endedAt: null,
-        messages: [
-          {
-            role: 'model',
-            text: "Welcome to Echo. This is your private space to reflect, untangle thoughts, or brainstorm. What's on your mind today?",
-            timestamp: fallbackTime,
-          },
-        ],
-        summary: null,
-        extractedTheme: null,
-        followUpQuestion: null,
-        followUpAsked: false,
-        followUpReferencedNext: false,
-      });
+      // Bug 1 fix: Do NOT fabricate fake local sessions! Set explicit error state
+      setCurrentSession(null);
+      setSessionError(err.message || "Couldn't start a session — please ensure the backend is running and retry.");
     } finally {
       setIsInitializingSession(false);
     }
@@ -107,6 +92,12 @@ export default function App() {
     if (apiClient && currentUser) {
       startNewSessionWithClient(apiClient, currentUser.uid);
       setIsSidebarOpen(false);
+    }
+  };
+
+  const handleRetrySession = () => {
+    if (apiClient && currentUser) {
+      startNewSessionWithClient(apiClient, currentUser.uid);
     }
   };
 
@@ -130,6 +121,7 @@ export default function App() {
   const handleSelectPastSession = (session: JournalSession) => {
     setCurrentSession(session);
     setPreviousTheme(null);
+    setSessionError(null);
     setIsSidebarOpen(false);
   };
 
@@ -141,6 +133,7 @@ export default function App() {
     }
     setCurrentUser(null);
     setCurrentSession(null);
+    setSessionError(null);
   };
 
   if (isAuthChecking) {
@@ -189,9 +182,12 @@ export default function App() {
           api={apiClient}
           currentSession={currentSession}
           previousTheme={previousTheme}
+          isInitializing={isInitializingSession}
+          sessionError={sessionError}
           onSessionUpdated={handleSessionUpdated}
           onEndSessionSuccess={handleEndSessionSuccess}
           onStartNewSession={handleStartNewSession}
+          onRetrySession={handleRetrySession}
         />
       </div>
     </div>

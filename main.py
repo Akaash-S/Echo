@@ -108,16 +108,17 @@ class EndSessionResponse(BaseModel):
     followUpAsked: bool
 
 # ---------------------------------------------------------------------------
-# Health & Status Endpoint
+# Health & Status Endpoint (Bug 4 fix: dynamically reports current active model)
 # ---------------------------------------------------------------------------
 @app.get("/health", tags=["Health"])
 async def health_check():
+    active_model = getattr(gemini_service, "DEFAULT_MODEL", "gemini-3.6-flash")
     return {
         "status": "healthy",
         "service": "echo-fastapi-backend",
         "auth_enforcement": "firebase_bearer_token",
         "database": "cloud_firestore",
-        "ai_engine": "google-genai-gemini-2.5-flash",
+        "ai_engine": f"google-genai-{active_model}",
     }
 
 # ---------------------------------------------------------------------------
@@ -138,7 +139,7 @@ async def start_session(
     POST /api/session/start
     
     1. Verifies Bearer token and checks rate limit.
-    2. Queries Firestore for most recent session with a non-null `extractedTheme`.
+    2. Queries Firestore for most recent session (with lazy synthesis if unfinalized).
     3. Calls Gemini in Python via `gemini_service.generate_opening_prompt`:
        - If prior theme exists: generates theme callback greeting.
        - If no prior theme: generates welcoming open-ended reflection greeting.
@@ -148,7 +149,7 @@ async def start_session(
     """
     logger.info(f"[/api/session/start] Starting session for user: {uid}")
     
-    # 2. Query most recent session with extractedTheme
+    # 2. Query most recent session with extractedTheme (including lazy synthesis)
     recent_session = firestore_client.get_most_recent_themed_session(uid)
     previous_theme = recent_session.get("extractedTheme") if recent_session else None
 

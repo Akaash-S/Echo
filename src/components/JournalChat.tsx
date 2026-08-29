@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowUp, X, Sparkles, Loader2, Square } from 'lucide-react';
+import { ArrowUp, X, Sparkles, Loader2, Square, AlertCircle, RefreshCw } from 'lucide-react';
 import { JournalSession, JournalMessage, EndSessionResponse } from '../types';
 import { EchoApiClient } from '../lib/api';
 import Markdown from 'react-markdown';
@@ -8,18 +8,24 @@ interface JournalChatProps {
   api: EchoApiClient;
   currentSession: JournalSession | null;
   previousTheme: string | null;
+  isInitializing?: boolean;
+  sessionError?: string | null;
   onSessionUpdated: (session: JournalSession) => void;
   onEndSessionSuccess: (analysis: EndSessionResponse) => void;
   onStartNewSession: () => void;
+  onRetrySession?: () => void;
 }
 
 export const JournalChat: React.FC<JournalChatProps> = ({
   api,
   currentSession,
   previousTheme,
+  isInitializing = false,
+  sessionError = null,
   onSessionUpdated,
   onEndSessionSuccess,
   onStartNewSession,
+  onRetrySession,
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -40,7 +46,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [currentSession?.messages, isSending, endNudge]);
+  }, [currentSession?.messages, isSending, endNudge, isInitializing]);
 
   // Adjust textarea height dynamically
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -53,7 +59,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = customText || inputText.trim();
-    if (!textToSend || isSending || !currentSession) return;
+    if (!textToSend || isSending || !currentSession || isInitializing) return;
 
     if (!customText) {
       setInputText('');
@@ -100,7 +106,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   };
 
   const handleEndSession = async () => {
-    if (!currentSession || isEnding) return;
+    if (!currentSession || isEnding || isInitializing) return;
     setIsEnding(true);
     setErrorMessage(null);
     try {
@@ -122,7 +128,6 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
   const handleRespondToNudge = () => {
     if (!endNudge) return;
-    // Fill composer with focus on answering the question or send directly
     setInputText(`Reflecting on: "${endNudge.followUpQuestion}" — `);
     setEndNudge(null);
     if (textareaRef.current) {
@@ -132,16 +137,39 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
   const userMessagesCount = currentSession?.messages.filter((m) => m.role === 'user').length || 0;
 
-  if (!currentSession) {
+  // Bug 1: If session start failed and there is no active session, show explicit error state with retry
+  if (!currentSession && sessionError && !isInitializing) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 bg-stone-900">
+        <div className="w-12 h-12 rounded-full bg-rose-950/60 border border-rose-900/60 flex items-center justify-center mb-4 text-rose-400">
+          <AlertCircle className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-serif text-stone-200 mb-2 font-normal">Couldn't start session</h2>
+        <p className="text-sm max-w-sm mb-6 text-stone-400 leading-relaxed">
+          {sessionError}
+        </p>
+        <button
+          onClick={onRetrySession || onStartNewSession}
+          className="px-4 py-2 bg-stone-800 hover:bg-stone-750 text-stone-200 hover:text-white border border-stone-700 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+        >
+          <RefreshCw className="w-4 h-4" />
+          <span>Retry starting session</span>
+        </button>
+      </div>
+    );
+  }
+
+  // If no session and not initializing and no error
+  if (!currentSession && !isInitializing) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 bg-stone-900">
         <h2 className="text-xl font-serif text-stone-200 mb-2 font-normal">No active session</h2>
         <p className="text-sm max-w-sm mb-6 text-stone-400">
           Begin a clean session to reflect, think out loud, or brainstorm.
         </p>
         <button
           onClick={onStartNewSession}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-medium rounded-lg text-sm transition-colors"
+          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-medium rounded-lg text-sm transition-colors cursor-pointer"
         >
           Start new session
         </button>
@@ -151,17 +179,22 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-stone-900 text-stone-100">
-      {/* Subtle top toolbar */}
+      {/* Top toolbar */}
       <div className="h-14 border-b border-stone-800/80 px-6 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 text-xs text-stone-400">
-          <span>
-            {new Date(currentSession.startedAt).toLocaleDateString([], {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-          </span>
-          {currentSession.extractedTheme && (
+          {currentSession ? (
+            <span>
+              {new Date(currentSession.startedAt).toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+              })}
+            </span>
+          ) : (
+            <span>New Reflection</span>
+          )}
+
+          {currentSession?.extractedTheme && (
             <>
               <span>•</span>
               <span className="text-amber-300/90 font-medium">
@@ -175,10 +208,10 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           <button
             id="end-session-action-btn"
             onClick={handleEndSession}
-            disabled={isEnding || userMessagesCount === 0}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 cursor-pointer ${
-              userMessagesCount > 0
-                ? 'border-stone-700 text-stone-300 hover:border-amber-500/50 hover:text-amber-300 bg-stone-850'
+            disabled={isEnding || userMessagesCount === 0 || isInitializing}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+              userMessagesCount > 0 && !isInitializing
+                ? 'border-stone-700 text-stone-300 hover:border-amber-500/50 hover:text-amber-300 bg-stone-850 cursor-pointer'
                 : 'border-stone-800 text-stone-400 cursor-not-allowed opacity-50'
             }`}
             title={userMessagesCount === 0 ? 'Add at least one entry before ending' : 'End & synthesize session'}
@@ -198,7 +231,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </div>
       </div>
 
-      {/* Main Conversation Column */}
+      {/* Main Conversation Column (Bug 3: Mounted instantly) */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
         <div className="max-w-2xl mx-auto space-y-8">
           {errorMessage && (
@@ -207,7 +240,21 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             </div>
           )}
 
-          {currentSession.messages.map((msg, index) => {
+          {/* Bug 3: Loading Skeleton for Opening Message while backend resolves */}
+          {isInitializing && (!currentSession || currentSession.messages.length === 0) && (
+            <div className="flex flex-col items-start">
+              <div className="text-[11px] text-stone-400 mb-1 px-1">Echo</div>
+              <div className="bg-stone-850/80 border border-stone-800/80 rounded-2xl px-5 py-4 max-w-md flex items-center gap-3">
+                <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
+                <span className="text-xs text-stone-300">
+                  Echo is preparing your reflection space...
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Message Turns */}
+          {currentSession?.messages.map((msg, index) => {
             const isUser = msg.role === 'user';
             return (
               <div
@@ -254,7 +301,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </div>
       </div>
 
-      {/* End-of-Session Nudge (Soft, dismissible card above composer) */}
+      {/* End-of-Session Nudge */}
       {endNudge && (
         <div className="max-w-2xl w-full mx-auto px-4 sm:px-6 mb-3">
           <div className="bg-stone-850 border border-stone-750 rounded-2xl p-4 shadow-lg relative transition-all">
@@ -306,7 +353,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </div>
       )}
 
-      {/* Composer fixed at bottom */}
+      {/* Composer fixed at bottom (Bug 3: Focusable immediately, send enabled when session ready) */}
       <div className="border-t border-stone-800/80 bg-stone-900/95 backdrop-blur-md px-4 sm:px-6 py-4 shrink-0">
         <div className="max-w-2xl mx-auto">
           <form
@@ -323,27 +370,27 @@ export const JournalChat: React.FC<JournalChatProps> = ({
               onChange={handleTextChange}
               onKeyDown={handleKeyDown}
               rows={1}
-              placeholder="What's on your mind?"
+              placeholder={isInitializing ? 'Preparing session... you can start typing' : "What's on your mind?"}
               className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-400 focus:outline-none resize-none px-2 py-1 max-h-48 leading-relaxed"
             />
 
             <button
               type="submit"
               id="send-message-button"
-              disabled={!inputText.trim() || isSending}
-              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 cursor-pointer ${
-                inputText.trim() && !isSending
-                  ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
+              disabled={!inputText.trim() || isSending || isInitializing || !currentSession}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                inputText.trim() && !isSending && !isInitializing && currentSession
+                  ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer'
                   : 'bg-stone-800 text-stone-400 cursor-not-allowed opacity-60'
               }`}
-              title="Send (Enter)"
+              title={isInitializing ? 'Connecting to Echo...' : 'Send (Enter)'}
             >
               <ArrowUp className="w-4 h-4 stroke-[2.5]" />
             </button>
           </form>
 
           <div className="text-[11px] text-stone-400 text-center mt-2 font-mono">
-            Return to send • Shift + Return for new line
+            {isInitializing ? 'Connecting to secure session...' : 'Return to send • Shift + Return for new line'}
           </div>
         </div>
       </div>

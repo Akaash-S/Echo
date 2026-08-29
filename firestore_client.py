@@ -131,38 +131,78 @@ def get_session(uid: str, session_id: str) -> Dict[str, Any]:
 
 def get_most_recent_themed_session(uid: str) -> Optional[Dict[str, Any]]:
     """
-    Fetch the most recent session for a uid that has a non-null, non-empty extractedTheme.
-    Used for Echo's signature next-session callback feature (§3.5 B).
+    Fetch the most recent session for a uid for cross-session continuity.
+    Satisfies Bug 2 correction:
+    1. Fetches the single most recent session for uid.
+    2. If it already has a non-null, non-empty extractedTheme, use it.
+    3. If it does not have extractedTheme, but has >= 1 user message, lazily
+       synthesizes the theme using Gemini, persists it to the prior session doc,
+       and returns it.
+    4. If zero user messages, returns None (generic opener).
     """
     db = get_db()
     sessions_ref = _get_sessions_collection(db, uid)
 
-    # Query sorted by startedAt descending
+    docs = []
     try:
         query = (
             sessions_ref
             .order_by("startedAt", direction=Query.DESCENDING)
-            .limit(20)
+            .limit(10)
         )
-        docs = query.stream()
-
-        for doc in docs:
-            data = doc.to_dict()
-            theme = data.get("extractedTheme")
-            if theme and isinstance(theme, str) and theme.strip():
-                return data
+        docs = list(query.stream())
     except Exception as e:
-        # If composite index is building or not yet available, fallback to client-side filter
-        docs = sessions_ref.limit(50).stream()
-        themed_sessions = []
-        for doc in docs:
-            d = doc.to_dict()
-            if d.get("extractedTheme"):
-                themed_sessions.append(d)
-        
-        if themed_sessions:
-            themed_sessions.sort(key=lambda x: x.get("startedAt", ""), reverse=True)
-            return themed_sessions[0]
+        docs = list(sessions_ref.limit(20).stream())
+        docs.sort(key=lambda doc: doc.to_dict().get("startedAt", ""), reverse=True)
+
+    if not docs:
+        return None
+
+    # 1. Inspect the single most recent session
+    most_recent_doc = docs[0]
+    data = most_recent_doc.to_dict()
+    session_id = data.get("sessionId") or most_recent_doc.id
+
+    # 2. Check if already has extractedTheme
+    theme = data.get("extractedTheme")
+    if theme and isinstance(theme, str) and theme.strip():
+        return data
+
+    # 3. If no theme, check if it has user messages for lazy synthesis
+    messages = data.get("messages", [])
+    user_messages = [m for m in messages if m.get("role") == "user" and m.get("text", "").strip()]
+
+    if len(user_messages) >= 1:
+        print(f"[Lazy Synthesis] Prior session '{session_id}' has {len(user_messages)} user reflections without a theme. Invoking Gemini for lazy synthesis...")
+        try:
+            import gemini_service
+            synthesis = gemini_service.synthesize_session(messages=messages)
+            extracted_theme = synthesis.get("extractedTheme")
+            summary = synthesis.get("summary")
+            follow_up = synthesis.get("followUpQuestion")
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            update_data = {
+                "summary": summary,
+                "extractedTheme": extracted_theme,
+                "followUpQuestion": follow_up,
+                "endedAt": data.get("endedAt") or now_iso,
+                "followUpAsked": True
+            }
+
+            most_recent_doc.reference.update(update_data)
+            data.update(update_data)
+            print(f"[Lazy Synthesis] Successfully synthesized and saved prior session '{session_id}' with theme: '{extracted_theme}'")
+            return data
+        except Exception as err:
+            print(f"[Lazy Synthesis Error] Failed to lazily synthesize prior session '{session_id}': {err}")
+
+    # 4. As fallback, check if any slightly older session in top docs had an extracted theme
+    for doc in docs[1:]:
+        d = doc.to_dict()
+        t = d.get("extractedTheme")
+        if t and isinstance(t, str) and t.strip():
+            return d
 
     return None
 
