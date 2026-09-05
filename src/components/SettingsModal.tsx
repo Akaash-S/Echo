@@ -1,15 +1,17 @@
 import React from 'react';
-import { Settings, X, Shield, MapPin, Sparkles, Moon, Cpu, Command } from 'lucide-react';
-import { AuthUser } from '../types';
+import { Settings, X, Shield, MapPin, Sparkles, Moon, Cpu, Command, Compass } from 'lucide-react';
+import { AuthUser, LocationCoords } from '../types';
 
 interface SettingsModalProps {
   user: AuthUser;
+  userLocation?: LocationCoords | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   user,
+  userLocation,
   isOpen,
   onClose,
 }) => {
@@ -70,14 +72,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Geolocation */}
           <div className="bg-stone-850/60 border border-stone-800 rounded-xl p-3.5 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <MapPin className="w-4 h-4 text-sky-400" />
-              <div>
-                <div className="text-xs font-medium text-stone-200">Location Anchoring</div>
-                <div className="text-[11px] text-stone-400">Place retrospectives across repeat reflection visits</div>
+              <MapPin className="w-4 h-4 text-sky-400 shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-stone-200 flex items-center gap-2">
+                  <span>Geolocation Anchoring</span>
+                  {userLocation && (
+                    <span className="text-[10px] bg-sky-500/10 text-sky-300 border border-sky-500/20 px-1.5 py-0.2 rounded font-mono">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-stone-400 mt-0.5">
+                  {userLocation ? (
+                    <span className="font-mono text-sky-300 text-[11px] bg-stone-900/90 border border-stone-800 px-2 py-0.5 rounded inline-block">
+                      {Math.abs(userLocation.lat).toFixed(4)}°{userLocation.lat >= 0 ? 'N' : 'S'}, {Math.abs(userLocation.lng).toFixed(4)}°{userLocation.lng >= 0 ? 'E' : 'W'}
+                    </span>
+                  ) : (
+                    'Place retrospectives across repeat reflection visits'
+                  )}
+                </div>
               </div>
             </div>
-            <span className="text-[10px] bg-sky-500/10 text-sky-300 border border-sky-500/20 px-2 py-0.5 rounded font-mono">
-              Enforced
+            <span className="text-[10px] bg-sky-500/10 text-sky-300 border border-sky-500/20 px-2 py-0.5 rounded font-mono shrink-0 ml-2">
+              {userLocation ? 'Geotagged' : 'Enforced'}
             </span>
           </div>
 

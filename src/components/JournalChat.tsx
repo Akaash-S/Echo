@@ -238,9 +238,14 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           {currentSession?.location && (
             <>
               <span>•</span>
-              <span className="text-stone-400 text-[11px] flex items-center gap-1 bg-stone-800/80 px-2 py-0.5 rounded-full">
-                <MapPin className="w-3 h-3 text-amber-400" />
-                <span>Geotagged</span>
+              <span
+                className="text-stone-300 text-[11px] font-mono flex items-center gap-1.5 bg-stone-850/90 border border-stone-750 px-2.5 py-0.5 rounded-full shadow-2xs"
+                title={`Latitude: ${currentSession.location.lat}, Longitude: ${currentSession.location.lng}`}
+              >
+                <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
+                <span>
+                  {Math.abs(currentSession.location.lat).toFixed(4)}°{currentSession.location.lat >= 0 ? 'N' : 'S'}, {Math.abs(currentSession.location.lng).toFixed(4)}°{currentSession.location.lng >= 0 ? 'E' : 'W'}
+                </span>
               </span>
             </>
           )}
