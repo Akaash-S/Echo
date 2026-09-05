@@ -7,33 +7,48 @@ from google import genai
 from google.genai import types
 from fastapi import HTTPException, status
 
+from dotenv import load_dotenv
+load_dotenv()
+
 logger = logging.getLogger("echo.gemini")
 logging.basicConfig(level=logging.INFO)
 
 # Model configuration with environment variable override
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+def get_model_name() -> str:
+    return os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+DEFAULT_MODEL = get_model_name()
 
 _client: Optional[genai.Client] = None
 
 def get_gemini_client() -> genai.Client:
     """
-    Initializes and returns the Google GenAI client in Python.
-    
-    Reads GEMINI_API_KEY from environment variables (populated via Secret Manager on Cloud Run).
+    Initializes and returns the Google GenAI client, backed by Vertex AI
+    (Gemini Enterprise Agent Platform) rather than the AI Studio API-key path.
+
+    Auth is via Application Default Credentials (ADC) - locally via
+    `gcloud auth application-default login`, and automatically via the
+    attached service account on Cloud Run. Billing is against the GCP
+    project's Cloud Billing account (and any linked trial credit), not
+    the separate AI-Studio "prepay" wallet used by GEMINI_API_KEY.
+
+    Requires GOOGLE_CLOUD_PROJECT (or VERTEX_PROJECT_ID) and, optionally,
+    VERTEX_LOCATION (defaults to us-central1) to be set in the environment.
     Satisfies Non-Negotiable #1 (no hardcoded secrets) & Non-Negotiable #5 (least privilege).
     """
     global _client
     if _client is not None:
         return _client
-        
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+
+    project_id = os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
+    if not project_id:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="GEMINI_API_KEY environment variable is not configured on the server."
+            detail="VERTEX_PROJECT_ID (or GOOGLE_CLOUD_PROJECT) environment variable is not configured on the server."
         )
-        
-    _client = genai.Client(api_key=api_key)
+    location = os.getenv("VERTEX_LOCATION", "us-central1")
+
+    _client = genai.Client(vertexai=True, project=project_id, location=location)
     return _client
 
 ECHO_SYSTEM_INSTRUCTION = """You are Echo, an empathetic, perceptive, and grounded personal AI journal companion.
@@ -68,7 +83,7 @@ def generate_opening_prompt(previous_theme: Optional[str] = None) -> str:
     - Generic warm opener: If no previous theme exists (first session), invites open reflection.
     """
     client = get_gemini_client()
-    model_name = DEFAULT_MODEL
+    model_name = get_model_name()
     
     if previous_theme and previous_theme.strip():
         user_prompt = f"""Generate a warm, natural 1-2 sentence opening message for a returning user.
@@ -112,7 +127,7 @@ def generate_conversation_turn(messages: List[Dict[str, Any]]) -> str:
     - Untrusted Input (§7 #4): Message texts are structured as user/model content turns.
     """
     client = get_gemini_client()
-    model_name = DEFAULT_MODEL
+    model_name = get_model_name()
     
     contents: List[types.Content] = []
     
@@ -174,7 +189,7 @@ def synthesize_session(messages: List[Dict[str, Any]]) -> Dict[str, str]:
     3. followUpQuestion: A thoughtful, open-ended question for between-session reflection.
     """
     client = get_gemini_client()
-    model_name = DEFAULT_MODEL
+    model_name = get_model_name()
     
     # Format the session transcript into readable text for analysis
     transcript_lines = []

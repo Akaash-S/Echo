@@ -6,14 +6,14 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, Depends, status, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+load_dotenv()
+
+from pydantic import BaseModel, Field
 
 from auth import get_verified_uid, get_verified_user
 import firestore_client
 import gemini_service
-
-load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("echo.backend")
@@ -112,7 +112,7 @@ class EndSessionResponse(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/health", tags=["Health"])
 async def health_check():
-    active_model = getattr(gemini_service, "DEFAULT_MODEL", "gemini-3.6-flash")
+    active_model = gemini_service.get_model_name()
     return {
         "status": "healthy",
         "service": "echo-fastapi-backend",
