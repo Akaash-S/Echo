@@ -67,8 +67,28 @@ export default function App() {
   }, []);
 
   const startNewSessionWithClient = async (client: EchoApiClient, uid: string, location?: LocationCoords) => {
+    // 1. INSTANT ZERO-LATENCY SHELL: Clear old session immediately and mount fresh empty shell
+    setActiveView('journal');
     setIsInitializingSession(true);
     setSessionError(null);
+    setPreviousTheme(null);
+
+    // Provide instant UI response with empty session shell
+    const optimisticEmptySession: JournalSession = {
+      sessionId: '',
+      userId: uid,
+      startedAt: new Date().toISOString(),
+      endedAt: null,
+      messages: [],
+      summary: null,
+      extractedTheme: null,
+      followUpQuestion: null,
+      followUpAsked: false,
+      followUpReferencedNext: false,
+      location: location || null,
+    };
+    setCurrentSession(optimisticEmptySession);
+
     try {
       const startRes = await client.startSession(location);
       const newSession: JournalSession = {
@@ -92,7 +112,6 @@ export default function App() {
       };
       setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
-      setActiveView('journal');
     } catch (err: any) {
       console.error('Failed to start session with backend API', err);
       // Bug 1 fix: Do NOT fabricate fake local sessions! Set explicit error state
@@ -105,16 +124,14 @@ export default function App() {
 
   const handleStartNewSession = (location?: LocationCoords) => {
     if (apiClient && currentUser) {
-      startNewSessionWithClient(apiClient, currentUser.uid, location);
       setIsSidebarOpen(false);
-      setActiveView('journal');
+      startNewSessionWithClient(apiClient, currentUser.uid, location);
     }
   };
 
   const handleRetrySession = () => {
     if (apiClient && currentUser) {
       startNewSessionWithClient(apiClient, currentUser.uid);
-      setActiveView('journal');
     }
   };
 
