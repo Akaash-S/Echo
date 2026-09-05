@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Plus, PanelLeftClose, PanelLeft, LogOut, Loader2, Trash2, User } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Plus, PanelLeftClose, PanelLeft, LogOut, Loader2, Trash2, User, MapPin, Shield, Settings, ChevronUp } from 'lucide-react';
 import { JournalSession } from '../types';
 import { EchoApiClient } from '../lib/api';
 
@@ -13,6 +13,9 @@ interface SidebarProps {
   onDeleteSession: (sessionId: string) => Promise<void>;
   onLogout: () => void;
   onOpenProfile: () => void;
+  onOpenRetrospectives: () => void;
+  onOpenAdmin: () => void;
+  onOpenSettings: () => void;
   userEmail: string;
   displayName?: string;
   photoURL?: string;
@@ -28,6 +31,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteSession,
   onLogout,
   onOpenProfile,
+  onOpenRetrospectives,
+  onOpenAdmin,
+  onOpenSettings,
   userEmail,
   displayName,
   photoURL,
@@ -35,6 +41,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [sessions, setSessions] = useState<JournalSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const fetchSessions = async () => {
     setIsLoading(true);
@@ -51,6 +59,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   useEffect(() => {
     fetchSessions();
   }, [currentSessionId]);
+
+  // Click outside listener for the popover menu
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
 
   const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
@@ -187,44 +210,113 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* User Account & Profile Trigger */}
-        <div className="p-3 border-t border-stone-800/80 shrink-0 flex items-center justify-between text-xs text-stone-400 gap-2">
-          <button
-            onClick={onOpenProfile}
-            className="flex-1 flex items-center gap-2.5 min-w-0 p-2 -ml-1 rounded-xl transition-all text-left cursor-pointer group hover:bg-stone-900 border border-transparent hover:border-stone-800"
-            title="View Profile, Place Retrospectives & Admin Metrics"
-          >
-            {photoURL ? (
-              <img
-                src={photoURL}
-                alt={displayName || 'User'}
-                className="w-7 h-7 rounded-full border border-stone-700 object-cover shrink-0 group-hover:border-amber-500/50"
-              />
-            ) : (
-              <div className="w-7 h-7 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-amber-300 font-serif text-xs shrink-0 group-hover:border-amber-500/50">
-                {displayName ? displayName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+        {/* User Footer with Floating Popover Mini-Menu */}
+        <div ref={menuRef} className="p-3 border-t border-stone-800/80 shrink-0 relative">
+          {/* Popover Mini-Menu over the sidebar */}
+          {isMenuOpen && (
+            <div className="absolute bottom-16 left-3 right-3 bg-stone-900 border border-stone-750 rounded-2xl p-1.5 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150 divide-y divide-stone-800">
+              {/* Profile Header */}
+              <div className="px-3 py-2 text-xs">
+                <p className="font-medium text-stone-200 truncate">{displayName || 'Journaler'}</p>
+                <p className="text-stone-500 text-[11px] truncate">{userEmail}</p>
               </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="font-medium truncate text-xs text-stone-200 group-hover:text-amber-200">
-                {displayName || 'Journaler'}
+
+              {/* Navigation Options */}
+              <div className="py-1 space-y-0.5">
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onOpenProfile();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs text-stone-300 hover:text-stone-100 hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer text-left"
+                >
+                  <User className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Profile Page</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onOpenRetrospectives();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs text-stone-300 hover:text-stone-100 hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer text-left"
+                >
+                  <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Place Retrospectives</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onOpenAdmin();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs text-stone-300 hover:text-stone-100 hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer text-left"
+                >
+                  <Shield className="w-3.5 h-3.5 text-stone-400" />
+                  <span>Admin Metrics</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onOpenSettings();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs text-stone-300 hover:text-stone-100 hover:bg-stone-800 flex items-center gap-2.5 transition-colors cursor-pointer text-left"
+                >
+                  <Settings className="w-3.5 h-3.5 text-stone-400" />
+                  <span>Settings</span>
+                </button>
               </div>
-              <div className="truncate text-stone-500 text-[11px]" title={userEmail}>
-                {userEmail}
+
+              {/* Sign Out */}
+              <div className="pt-1">
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    onLogout();
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 flex items-center gap-2.5 transition-colors cursor-pointer text-left"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </button>
               </div>
             </div>
-          </button>
+          )}
 
-          <button
-            onClick={onLogout}
-            className="text-stone-400 hover:text-stone-200 p-2 rounded-lg hover:bg-stone-900 transition-colors shrink-0 cursor-pointer"
-            title="Sign out"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
+          {/* User Account Button in Sidebar Footer */}
+          <div className="flex items-center justify-between text-xs text-stone-400 gap-2">
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="flex-1 flex items-center gap-2.5 min-w-0 p-2 -ml-1 rounded-xl transition-all text-left cursor-pointer group hover:bg-stone-900 border border-transparent hover:border-stone-800"
+              title="Account menu"
+            >
+              {photoURL ? (
+                <img
+                  src={photoURL}
+                  alt={displayName || 'User'}
+                  className="w-7 h-7 rounded-full border border-stone-700 object-cover shrink-0 group-hover:border-amber-500/50"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-amber-300 font-serif text-xs shrink-0 group-hover:border-amber-500/50">
+                  {displayName ? displayName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium truncate text-xs text-stone-200 group-hover:text-amber-200">
+                  {displayName || 'Journaler'}
+                </div>
+                <div className="truncate text-stone-500 text-[11px]" title={userEmail}>
+                  {userEmail}
+                </div>
+              </div>
+              <ChevronUp className={`w-3.5 h-3.5 text-stone-500 transition-transform ${isMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
         </div>
       </aside>
     </>
   );
 };
+
 

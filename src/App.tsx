@@ -8,7 +8,8 @@ import { JournalChat } from './components/JournalChat';
 import { Sidebar } from './components/Sidebar';
 import { RetrospectivesModal } from './components/RetrospectivesModal';
 import { AdminModal } from './components/AdminModal';
-import { ProfileModal } from './components/ProfileModal';
+import { SettingsModal } from './components/SettingsModal';
+import { ProfileView } from './components/ProfileView';
 import { LocationGateModal } from './components/LocationGateModal';
 import { PanelLeft, Loader2 } from 'lucide-react';
 
@@ -16,6 +17,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
+  const [activeView, setActiveView] = useState<'journal' | 'profile'>('journal');
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatusResponse | null>(null);
@@ -23,9 +25,9 @@ export default function App() {
   const [isLocationGateOpen, setIsLocationGateOpen] = useState(false);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRetrospectivesOpen, setIsRetrospectivesOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isInitializingSession, setIsInitializingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -113,6 +115,7 @@ export default function App() {
 
   const startNewSessionWithClient = async (client: EchoApiClient, uid: string, location?: LocationCoords) => {
     // 1. INSTANT ZERO-LATENCY SHELL: Clear old session immediately and mount fresh empty shell
+    setActiveView('journal');
     setIsInitializingSession(true);
     setSessionError(null);
     setPreviousTheme(null);
@@ -178,6 +181,7 @@ export default function App() {
   const handleStartNewSession = (location?: LocationCoords) => {
     if (apiClient && currentUser) {
       setIsSidebarOpen(false);
+      setActiveView('journal');
       startNewSessionWithClient(apiClient, currentUser.uid, location || userLocation || undefined);
     }
   };
@@ -224,6 +228,7 @@ export default function App() {
     setPreviousTheme(null);
     setSessionError(null);
     setIsSidebarOpen(false);
+    setActiveView('journal');
   };
 
   const handleLogout = async () => {
@@ -235,7 +240,7 @@ export default function App() {
     setCurrentUser(null);
     setCurrentSession(null);
     setSessionError(null);
-    setIsProfileOpen(false);
+    setActiveView('journal');
   };
 
   if (isAuthChecking) {
@@ -262,9 +267,12 @@ export default function App() {
         onNewSession={() => handleStartNewSession()}
         onDeleteSession={handleDeleteSession}
         onOpenProfile={() => {
-          setIsProfileOpen(true);
+          setActiveView('profile');
           setIsSidebarOpen(false);
         }}
+        onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
+        onOpenAdmin={() => setIsAdminOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onLogout={handleLogout}
         userEmail={currentUser.email}
         displayName={currentUser.displayName}
@@ -286,36 +294,36 @@ export default function App() {
           <div className="w-5" />
         </div>
 
-        {/* Active Journal Conversation Stream */}
-        <JournalChat
-          api={apiClient}
-          currentSession={currentSession}
-          previousTheme={previousTheme}
-          reminderStatus={reminderStatus}
-          isInitializing={isInitializingSession}
-          sessionError={sessionError}
-          onSessionUpdated={handleSessionUpdated}
-          onEndSessionSuccess={handleEndSessionSuccess}
-          onStartNewSession={handleStartNewSession}
-          onRetrySession={handleRetrySession}
-        />
+        {/* Dynamic View: Active Reflection vs. Full Profile Page */}
+        {activeView === 'journal' ? (
+          <JournalChat
+            api={apiClient}
+            currentSession={currentSession}
+            previousTheme={previousTheme}
+            reminderStatus={reminderStatus}
+            isInitializing={isInitializingSession}
+            sessionError={sessionError}
+            onSessionUpdated={handleSessionUpdated}
+            onEndSessionSuccess={handleEndSessionSuccess}
+            onStartNewSession={handleStartNewSession}
+            onRetrySession={handleRetrySession}
+          />
+        ) : (
+          <ProfileView
+            api={apiClient}
+            user={currentUser}
+            onBackToJournal={() => setActiveView('journal')}
+            onSelectSession={handleSelectPastSession}
+            onStartNewSession={() => handleStartNewSession()}
+            onLogout={handleLogout}
+          />
+        )}
       </div>
 
       {/* Mandatory Location Permission Gate */}
       <LocationGateModal
         isOpen={isLocationGateOpen && Boolean(currentUser)}
         onLocationAcquired={handleLocationAcquired}
-      />
-
-      {/* User Profile Pop-up Modal with Retrospectives & Admin links */}
-      <ProfileModal
-        api={apiClient}
-        user={currentUser}
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
-        onOpenAdmin={() => setIsAdminOpen(true)}
-        onLogout={handleLogout}
       />
 
       {/* Place Retrospectives Modal (§1) */}
@@ -330,6 +338,13 @@ export default function App() {
         api={apiClient}
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        user={currentUser}
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
