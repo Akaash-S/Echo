@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, PanelLeftClose, PanelLeft, LogOut, Loader2, MapPin, Shield } from 'lucide-react';
+import { Plus, PanelLeftClose, PanelLeft, LogOut, Loader2, MapPin, Shield, User } from 'lucide-react';
 import { JournalSession } from '../types';
 import { EchoApiClient } from '../lib/api';
 
@@ -13,7 +13,10 @@ interface SidebarProps {
   onLogout: () => void;
   onOpenRetrospectives: () => void;
   onOpenAdmin: () => void;
+  onOpenProfile: () => void;
   userEmail: string;
+  displayName?: string;
+  photoURL?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -26,7 +29,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   onOpenRetrospectives,
   onOpenAdmin,
+  onOpenProfile,
   userEmail,
+  displayName,
+  photoURL,
 }) => {
   const [sessions, setSessions] = useState<JournalSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -170,14 +176,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* User Account & Logout */}
-        <div className="p-3 border-t border-stone-800/80 shrink-0 flex items-center justify-between text-xs text-stone-400">
-          <div className="truncate max-w-[170px]" title={userEmail}>
-            {userEmail}
-          </div>
+        {/* User Account & Profile Trigger */}
+        <div className="p-3 border-t border-stone-800/80 shrink-0 flex items-center justify-between text-xs text-stone-400 gap-2">
+          <button
+            onClick={onOpenProfile}
+            className="flex-1 flex items-center gap-2.5 min-w-0 p-1.5 -ml-1 rounded-xl hover:bg-stone-900 transition-colors text-left cursor-pointer group"
+            title="View Profile & Insights"
+          >
+            {photoURL ? (
+              <img
+                src={photoURL}
+                alt={displayName || 'User'}
+                className="w-7 h-7 rounded-full border border-stone-700 object-cover shrink-0 group-hover:border-amber-500/50"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-amber-300 font-serif text-xs shrink-0 group-hover:border-amber-500/50">
+                {displayName ? displayName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-stone-200 font-medium truncate group-hover:text-amber-200 text-xs">
+                {displayName || 'Journaler'}
+              </div>
+              <div className="truncate text-stone-500 text-[11px]" title={userEmail}>
+                {userEmail}
+              </div>
+            </div>
+          </button>
+
           <button
             onClick={onLogout}
-            className="text-stone-400 hover:text-stone-200 p-1.5 rounded-lg hover:bg-stone-900 transition-colors"
+            className="text-stone-400 hover:text-stone-200 p-2 rounded-lg hover:bg-stone-900 transition-colors shrink-0 cursor-pointer"
             title="Sign out"
           >
             <LogOut className="w-3.5 h-3.5" />

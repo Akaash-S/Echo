@@ -8,6 +8,7 @@ import { JournalChat } from './components/JournalChat';
 import { Sidebar } from './components/Sidebar';
 import { RetrospectivesModal } from './components/RetrospectivesModal';
 import { AdminModal } from './components/AdminModal';
+import { ProfileModal } from './components/ProfileModal';
 import { PanelLeft, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRetrospectivesOpen, setIsRetrospectivesOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isInitializingSession, setIsInitializingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -172,8 +174,11 @@ export default function App() {
         onNewSession={() => handleStartNewSession()}
         onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
+        onOpenProfile={() => setIsProfileOpen(true)}
         onLogout={handleLogout}
         userEmail={currentUser.email}
+        displayName={currentUser.displayName}
+        photoURL={currentUser.photoURL}
       />
 
       {/* Main Panel */}
@@ -205,6 +210,15 @@ export default function App() {
           onRetrySession={handleRetrySession}
         />
       </div>
+
+      {/* User Profile & Insights Modal */}
+      <ProfileModal
+        api={apiClient}
+        user={currentUser}
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        onLogout={handleLogout}
+      />
 
       {/* Place Retrospectives Modal (§1) */}
       <RetrospectivesModal
