@@ -317,38 +317,6 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </div>
       )}
 
-      {/* Geotagging Consent & Prompt (§1) */}
-      {!isSessionEnded && !currentSession?.location && !locationDismissed && !isInitializing && (
-        <div className="bg-stone-850/90 border-b border-stone-800 px-6 py-2.5 flex items-center justify-between text-xs text-stone-300">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>Add location to this reflection? Enables place-based retrospectives for repeated visits.</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={handleAttachLocation}
-              disabled={isGettingLocation}
-              className="text-xs px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              {isGettingLocation ? (
-                <>
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  <span>Locating...</span>
-                </>
-              ) : (
-                <span>Add location</span>
-              )}
-            </button>
-            <button
-              onClick={() => setLocationDismissed(true)}
-              className="text-xs px-2 py-1 text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
-            >
-              Skip
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Main Conversation Column */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
         <div className="max-w-2xl mx-auto space-y-8">

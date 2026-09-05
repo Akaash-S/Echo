@@ -8,18 +8,22 @@ import { JournalChat } from './components/JournalChat';
 import { Sidebar } from './components/Sidebar';
 import { RetrospectivesModal } from './components/RetrospectivesModal';
 import { AdminModal } from './components/AdminModal';
-import { ProfileView } from './components/ProfileView';
+import { ProfileModal } from './components/ProfileModal';
+import { LocationGateModal } from './components/LocationGateModal';
 import { PanelLeft, Loader2 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
-  const [activeView, setActiveView] = useState<'journal' | 'profile'>('journal');
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatusResponse | null>(null);
+  const [userLocation, setUserLocation] = useState<LocationCoords | null>(null);
+  const [isLocationGateOpen, setIsLocationGateOpen] = useState(false);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isRetrospectivesOpen, setIsRetrospectivesOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isInitializingSession, setIsInitializingSession] = useState(false);
@@ -51,7 +55,26 @@ export default function App() {
             .then((res) => setReminderStatus(res))
             .catch((err) => console.warn('Reminder check failed:', err));
 
-          await startNewSessionWithClient(client, authUser.uid);
+          // Mandatory Location Check (§1)
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const coords: LocationCoords = {
+                  lat: pos.coords.latitude,
+                  lng: pos.coords.longitude,
+                };
+                setUserLocation(coords);
+                startNewSessionWithClient(client, authUser.uid, coords);
+              },
+              () => {
+                // If permission is pending or denied, block with mandatory modal
+                setIsLocationGateOpen(true);
+              },
+              { timeout: 5000 }
+            );
+          } else {
+            setIsLocationGateOpen(true);
+          }
         } catch (err) {
           console.error('Failed to get user token on auth state change:', err);
           setCurrentUser(null);
@@ -59,6 +82,7 @@ export default function App() {
       } else {
         setCurrentUser(null);
         setCurrentSession(null);
+        setUserLocation(null);
       }
       setIsAuthChecking(false);
     });
@@ -66,12 +90,34 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  const handleLocationAcquired = async (coords: LocationCoords) => {
+    setUserLocation(coords);
+    setIsLocationGateOpen(false);
+
+    if (apiClient && currentUser) {
+      if (currentSession && currentSession.sessionId && !currentSession.location) {
+        try {
+          await apiClient.updateSessionLocation(currentSession.sessionId, coords);
+          setCurrentSession({
+            ...currentSession,
+            location: coords,
+          });
+        } catch (err) {
+          console.warn('Failed to update session location:', err);
+        }
+      } else if (!currentSession || !currentSession.sessionId) {
+        startNewSessionWithClient(apiClient, currentUser.uid, coords);
+      }
+    }
+  };
+
   const startNewSessionWithClient = async (client: EchoApiClient, uid: string, location?: LocationCoords) => {
     // 1. INSTANT ZERO-LATENCY SHELL: Clear old session immediately and mount fresh empty shell
-    setActiveView('journal');
     setIsInitializingSession(true);
     setSessionError(null);
     setPreviousTheme(null);
+
+    const activeLoc = location || userLocation;
 
     // Provide instant UI response with empty session shell
     const optimisticEmptySession: JournalSession = {
@@ -85,12 +131,19 @@ export default function App() {
       followUpQuestion: null,
       followUpAsked: false,
       followUpReferencedNext: false,
-      location: location || null,
+      location: activeLoc || null,
     };
     setCurrentSession(optimisticEmptySession);
 
+    // If location is missing, trigger mandatory gate
+    if (!activeLoc) {
+      setIsLocationGateOpen(true);
+      setIsInitializingSession(false);
+      return;
+    }
+
     try {
-      const startRes = await client.startSession(location);
+      const startRes = await client.startSession(activeLoc);
       const newSession: JournalSession = {
         sessionId: startRes.sessionId,
         userId: uid,
@@ -108,7 +161,7 @@ export default function App() {
         followUpQuestion: null,
         followUpAsked: false,
         followUpReferencedNext: false,
-        location: location || null,
+        location: startRes.location ? { lat: startRes.location.lat, lng: startRes.location.lng } : activeLoc,
       };
       setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
@@ -125,13 +178,27 @@ export default function App() {
   const handleStartNewSession = (location?: LocationCoords) => {
     if (apiClient && currentUser) {
       setIsSidebarOpen(false);
-      startNewSessionWithClient(apiClient, currentUser.uid, location);
+      startNewSessionWithClient(apiClient, currentUser.uid, location || userLocation || undefined);
     }
   };
 
   const handleRetrySession = () => {
     if (apiClient && currentUser) {
-      startNewSessionWithClient(apiClient, currentUser.uid);
+      startNewSessionWithClient(apiClient, currentUser.uid, userLocation || undefined);
+    }
+  };
+
+  const handleDeleteSession = async (sessionId: string) => {
+    if (!apiClient) return;
+    try {
+      await apiClient.deleteSession(sessionId);
+      if (currentSession?.sessionId === sessionId) {
+        if (currentUser) {
+          startNewSessionWithClient(apiClient, currentUser.uid, userLocation || undefined);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
     }
   };
 
@@ -157,7 +224,6 @@ export default function App() {
     setPreviousTheme(null);
     setSessionError(null);
     setIsSidebarOpen(false);
-    setActiveView('journal');
   };
 
   const handleLogout = async () => {
@@ -169,6 +235,7 @@ export default function App() {
     setCurrentUser(null);
     setCurrentSession(null);
     setSessionError(null);
+    setIsProfileOpen(false);
   };
 
   if (isAuthChecking) {
@@ -190,14 +257,12 @@ export default function App() {
         api={apiClient}
         currentSessionId={currentSession?.sessionId || null}
         isOpen={isSidebarOpen}
-        activeView={activeView}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         onSelectSession={handleSelectPastSession}
         onNewSession={() => handleStartNewSession()}
-        onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
-        onOpenAdmin={() => setIsAdminOpen(true)}
+        onDeleteSession={handleDeleteSession}
         onOpenProfile={() => {
-          setActiveView('profile');
+          setIsProfileOpen(true);
           setIsSidebarOpen(false);
         }}
         onLogout={handleLogout}
@@ -221,31 +286,37 @@ export default function App() {
           <div className="w-5" />
         </div>
 
-        {/* Dynamic View: Journal Conversation vs. User Profile Page */}
-        {activeView === 'journal' ? (
-          <JournalChat
-            api={apiClient}
-            currentSession={currentSession}
-            previousTheme={previousTheme}
-            reminderStatus={reminderStatus}
-            isInitializing={isInitializingSession}
-            sessionError={sessionError}
-            onSessionUpdated={handleSessionUpdated}
-            onEndSessionSuccess={handleEndSessionSuccess}
-            onStartNewSession={handleStartNewSession}
-            onRetrySession={handleRetrySession}
-          />
-        ) : (
-          <ProfileView
-            api={apiClient}
-            user={currentUser}
-            onBackToJournal={() => setActiveView('journal')}
-            onSelectSession={handleSelectPastSession}
-            onStartNewSession={() => handleStartNewSession()}
-            onLogout={handleLogout}
-          />
-        )}
+        {/* Active Journal Conversation Stream */}
+        <JournalChat
+          api={apiClient}
+          currentSession={currentSession}
+          previousTheme={previousTheme}
+          reminderStatus={reminderStatus}
+          isInitializing={isInitializingSession}
+          sessionError={sessionError}
+          onSessionUpdated={handleSessionUpdated}
+          onEndSessionSuccess={handleEndSessionSuccess}
+          onStartNewSession={handleStartNewSession}
+          onRetrySession={handleRetrySession}
+        />
       </div>
+
+      {/* Mandatory Location Permission Gate */}
+      <LocationGateModal
+        isOpen={isLocationGateOpen && Boolean(currentUser)}
+        onLocationAcquired={handleLocationAcquired}
+      />
+
+      {/* User Profile Pop-up Modal with Retrospectives & Admin links */}
+      <ProfileModal
+        api={apiClient}
+        user={currentUser}
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
+        onOpenAdmin={() => setIsAdminOpen(true)}
+        onLogout={handleLogout}
+      />
 
       {/* Place Retrospectives Modal (§1) */}
       <RetrospectivesModal

@@ -348,3 +348,35 @@ def get_aggregate_admin_metrics() -> Dict[str, Any]:
         "sessionsLast7Days": sessions_last_7_days,
         "avgSessionsPerUser": avg_per_user,
     }
+
+def delete_session(uid: str, session_id: str) -> bool:
+    """
+    Deletes a session document strictly scoped to /users/{uid}/sessions/{session_id}.
+    Verifies ownership.
+    """
+    db = get_db()
+    session_ref = _get_sessions_collection(db, uid).document(session_id)
+    doc = session_ref.get()
+    if not doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found."
+        )
+    session_ref.delete()
+    return True
+
+def update_session_location(uid: str, session_id: str, location: Dict[str, float]) -> Dict[str, Any]:
+    """
+    Updates or attaches location coordinates to an existing session.
+    """
+    db = get_db()
+    session_ref = _get_sessions_collection(db, uid).document(session_id)
+    doc = session_ref.get()
+    if not doc.exists:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Session '{session_id}' not found."
+        )
+    session_ref.update({"location": location})
+    return session_ref.get().to_dict()
+

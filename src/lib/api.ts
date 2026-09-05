@@ -93,7 +93,21 @@ export class EchoApiClient {
     return this.fetchWithAuth<{ retrospectives: PlaceRetrospective[] }>('/api/retrospective');
   }
 
+  async deleteSession(sessionId: string): Promise<{ status: string; sessionId: string }> {
+    return this.fetchWithAuth<{ status: string; sessionId: string }>(`/api/session/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateSessionLocation(sessionId: string, location: LocationCoords): Promise<{ status: string; session: JournalSession }> {
+    return this.fetchWithAuth<{ status: string; session: JournalSession }>(`/api/session/${sessionId}/location`, {
+      method: 'PATCH',
+      body: JSON.stringify(location),
+    });
+  }
+
   async getAdminMetrics(): Promise<AdminMetrics> {
     return this.fetchWithAuth<AdminMetrics>('/api/admin/metrics');
   }
 }
+

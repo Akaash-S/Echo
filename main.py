@@ -338,15 +338,47 @@ async def list_sessions(
         raw_results = [doc.to_dict() for doc in docs]
         raw_results.sort(key=lambda x: x.get("startedAt", ""), reverse=True)
         
-    # Return only sessions that contain user reflections or completed synthesis
-    results = []
-    for s in raw_results:
-        msgs = s.get("messages", [])
-        has_user_msgs = any(m.get("role") == "user" and m.get("text", "").strip() for m in msgs)
-        if has_user_msgs or s.get("summary") or s.get("extractedTheme"):
-            results.append(s)
+    # Return all sessions belonging to user
+    return {"sessions": raw_results}
 
-    return {"sessions": results}
+
+@app.delete(
+    "/api/session/{session_id}",
+    tags=["Sessions"],
+    summary="Delete a journal reflection session",
+)
+async def delete_session(
+    session_id: str,
+    uid: str = Depends(get_verified_uid),
+):
+    """
+    DELETE /api/session/{session_id}
+    Deletes the session document strictly scoped to /users/{uid}/sessions/{session_id}.
+    """
+    firestore_client.delete_session(uid, session_id)
+    return {"status": "deleted", "sessionId": session_id}
+
+
+@app.patch(
+    "/api/session/{session_id}/location",
+    tags=["Sessions"],
+    summary="Attach or update geolocation coordinates on an active session",
+)
+async def update_session_location(
+    session_id: str,
+    payload: LocationPayload,
+    uid: str = Depends(get_verified_uid),
+):
+    """
+    PATCH /api/session/{session_id}/location
+    Attaches { lat, lng } coordinates to the session document under /users/{uid}/sessions/{session_id}.
+    """
+    updated = firestore_client.update_session_location(
+        uid=uid,
+        session_id=session_id,
+        location=payload.model_dump(),
+    )
+    return {"status": "updated", "session": updated}
 
 
 # ---------------------------------------------------------------------------
