@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
 import firebase_admin
 from firebase_admin import firestore
@@ -28,7 +28,8 @@ def _get_sessions_collection(db, uid: str):
 def create_session(
     uid: str,
     opening_message_text: str,
-    previous_theme: Optional[str] = None
+    previous_theme: Optional[str] = None,
+    location: Optional[Dict[str, float]] = None,
 ) -> Dict[str, Any]:
     """
     Create a new session document under /users/{uid}/sessions/{sessionId}
@@ -42,6 +43,7 @@ def create_session(
     - followUpQuestion: null
     - followUpAsked: false
     - followUpReferencedNext: false
+    - location: { lat: number, lng: number } | null
     """
     db = get_db()
     sessions_coll = _get_sessions_collection(db, uid)
@@ -78,6 +80,7 @@ def create_session(
         "followUpQuestion": None,
         "followUpAsked": False,
         "followUpReferencedNext": False,
+        "location": location if location and "lat" in location and "lng" in location else None,
     }
 
     session_ref = sessions_coll.document(session_id)
@@ -265,3 +268,83 @@ def end_session_and_update(
     # Return full updated document
     updated_doc = session_ref.get().to_dict()
     return updated_doc
+
+def get_last_session_time(uid: str) -> Optional[datetime]:
+    """
+    Returns the datetime of the authenticated user's most recent session (endedAt or startedAt).
+    Enforces Rule 9: reads only the authenticated user's own data.
+    """
+    db = get_db()
+    sessions_ref = _get_sessions_collection(db, uid)
+    try:
+        recent_docs = sessions_ref.order_by("startedAt", direction=Query.DESCENDING).limit(5).stream()
+        for doc in recent_docs:
+            d = doc.to_dict()
+            msgs = d.get("messages", [])
+            has_user = any(m.get("role") == "user" and m.get("text", "").strip() for m in msgs)
+            if has_user or d.get("summary"):
+                iso_str = d.get("endedAt") or d.get("startedAt")
+                if iso_str:
+                    return datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    except Exception as e:
+        print(f"[get_last_session_time error]: {e}")
+    return None
+
+def get_user_geotagged_sessions(uid: str) -> List[Dict[str, Any]]:
+    """
+    Fetches all sessions belonging to /users/{uid}/sessions that have a location object.
+    Enforces Rule 9: location data is strictly scoped under /users/{uid}/sessions.
+    """
+    db = get_db()
+    sessions_ref = _get_sessions_collection(db, uid)
+    geotagged = []
+    try:
+        docs = sessions_ref.order_by("startedAt", direction=Query.DESCENDING).limit(50).stream()
+        for doc in docs:
+            d = doc.to_dict()
+            loc = d.get("location")
+            if loc and isinstance(loc, dict) and "lat" in loc and "lng" in loc:
+                geotagged.append(d)
+    except Exception as e:
+        print(f"[get_user_geotagged_sessions error]: {e}")
+    return geotagged
+
+def get_aggregate_admin_metrics() -> Dict[str, Any]:
+    """
+    Enforces Security Constitution Rule 9 & §3:
+    Admin routes may only return AGGREGATE data (counts, not content).
+    No code path reads session messages, summary, or extractedTheme.
+    """
+    db = get_db()
+    total_users = 0
+    total_sessions = 0
+    sessions_last_7_days = 0
+    now_utc = datetime.now(timezone.utc)
+    seven_days_ago_iso = (now_utc - timedelta(days=7)).isoformat()
+
+    try:
+        # 1. Total users
+        user_docs = list(db.collection("users").list_documents())
+        total_users = len(user_docs)
+
+        # 2. Total sessions via collection_group (metadata only, no content)
+        sessions_group = db.collection_group("sessions")
+        session_docs = list(sessions_group.select(["startedAt"]).stream())
+        total_sessions = len(session_docs)
+
+        # 3. Sessions in the last 7 days
+        for s in session_docs:
+            started = s.to_dict().get("startedAt", "")
+            if started and started >= seven_days_ago_iso:
+                sessions_last_7_days += 1
+    except Exception as e:
+        print(f"[get_aggregate_admin_metrics error]: {e}")
+
+    avg_per_user = round(total_sessions / max(1, total_users), 1) if total_users > 0 else 0.0
+
+    return {
+        "totalUsers": total_users,
+        "totalSessions": total_sessions,
+        "sessionsLast7Days": sessions_last_7_days,
+        "avgSessionsPerUser": avg_per_user,
+    }

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, PanelLeftClose, PanelLeft, LogOut, Loader2 } from 'lucide-react';
+import { Plus, PanelLeftClose, PanelLeft, LogOut, Loader2, MapPin, Shield } from 'lucide-react';
 import { JournalSession } from '../types';
 import { EchoApiClient } from '../lib/api';
 
@@ -11,6 +11,8 @@ interface SidebarProps {
   onSelectSession: (session: JournalSession) => void;
   onNewSession: () => void;
   onLogout: () => void;
+  onOpenRetrospectives: () => void;
+  onOpenAdmin: () => void;
   userEmail: string;
 }
 
@@ -22,6 +24,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectSession,
   onNewSession,
   onLogout,
+  onOpenRetrospectives,
+  onOpenAdmin,
   userEmail,
 }) => {
   const [sessions, setSessions] = useState<JournalSession[]>([]);
@@ -145,6 +149,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
               );
             })
           )}
+        </div>
+
+        {/* Feature Actions */}
+        <div className="p-3 border-t border-stone-800/80 space-y-1">
+          <button
+            onClick={onOpenRetrospectives}
+            className="w-full py-1.5 px-2.5 rounded-lg text-xs text-stone-400 hover:text-stone-200 hover:bg-stone-900 transition-colors flex items-center gap-2 cursor-pointer"
+          >
+            <MapPin className="w-3.5 h-3.5 text-amber-400/80" />
+            <span>Place Retrospectives</span>
+          </button>
+
+          <button
+            onClick={onOpenAdmin}
+            className="w-full py-1.5 px-2.5 rounded-lg text-xs text-stone-400 hover:text-stone-200 hover:bg-stone-900 transition-colors flex items-center gap-2 cursor-pointer"
+          >
+            <Shield className="w-3.5 h-3.5 text-stone-400" />
+            <span>Admin Metrics</span>
+          </button>
         </div>
 
         {/* User Account & Logout */}

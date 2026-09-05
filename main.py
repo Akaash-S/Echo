@@ -1,6 +1,8 @@
 import time
 import os
+import math
 import logging
+from datetime import datetime, timezone
 from collections import defaultdict
 from typing import Optional, List, Dict, Any
 
@@ -11,7 +13,7 @@ load_dotenv()
 
 from pydantic import BaseModel, Field
 
-from auth import get_verified_uid, get_verified_user
+from auth import get_verified_uid, get_verified_user, require_admin
 import firestore_client
 import gemini_service
 
@@ -81,11 +83,19 @@ class MessageItem(BaseModel):
     text: str
     timestamp: str
 
+class LocationPayload(BaseModel):
+    lat: float = Field(..., description="Latitude coordinate")
+    lng: float = Field(..., description="Longitude coordinate")
+
+class StartSessionRequest(BaseModel):
+    location: Optional[LocationPayload] = Field(None, description="Optional user geolocation")
+
 class StartSessionResponse(BaseModel):
     sessionId: str
     openingMessage: str
     previousTheme: Optional[str] = None
     startedAt: str
+    location: Optional[Dict[str, float]] = None
 
 class MessageRequest(BaseModel):
     sessionId: str = Field(..., description="The unique session identifier")
@@ -130,9 +140,10 @@ async def health_check():
     response_model=StartSessionResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["Sessions"],
-    summary="Start a new journal session with Gemini dynamic opening prompt and theme callback",
+    summary="Start a new journal session with Gemini dynamic opening prompt, theme callback, and optional geotagging",
 )
 async def start_session(
+    payload: Optional[StartSessionRequest] = None,
     uid: str = Depends(check_rate_limit),
 ):
     """
@@ -145,7 +156,7 @@ async def start_session(
        - If no prior theme: generates welcoming open-ended reflection greeting.
     4. Marks previous session's followUpReferencedNext: true (if applicable).
     5. Creates new session document under /users/{uid}/sessions/{sessionId}.
-    6. Returns { sessionId, openingMessage, previousTheme, startedAt }.
+    6. Returns { sessionId, openingMessage, previousTheme, startedAt, location }.
     """
     logger.info(f"[/api/session/start] Starting session for user: {uid}")
     
@@ -160,11 +171,14 @@ async def start_session(
     # 3. Call Gemini for dynamic opening prompt
     opening_message = gemini_service.generate_opening_prompt(previous_theme=previous_theme)
 
+    loc_dict = payload.location.model_dump() if payload and payload.location else None
+
     # 5. Persist to Firestore under /users/{uid}/sessions/{sessionId}
     session_doc = firestore_client.create_session(
         uid=uid,
         opening_message_text=opening_message,
         previous_theme=previous_theme,
+        location=loc_dict,
     )
 
     return StartSessionResponse(
@@ -172,6 +186,7 @@ async def start_session(
         openingMessage=opening_message,
         previousTheme=previous_theme,
         startedAt=session_doc["startedAt"],
+        location=session_doc.get("location"),
     )
 
 
@@ -332,6 +347,129 @@ async def list_sessions(
             results.append(s)
 
     return {"sessions": results}
+
+
+# ---------------------------------------------------------------------------
+# §2 Reminders Endpoint (Brief §2)
+# ---------------------------------------------------------------------------
+@app.get(
+    "/api/reminder-status",
+    tags=["Reminders"],
+    summary="Check days since user's last journal reflection",
+)
+async def reminder_status(
+    uid: str = Depends(get_verified_uid),
+):
+    """
+    GET /api/reminder-status
+    Enforces Rule 9: Reads only the authenticated user's own last session time.
+    Returns { daysSinceLastEntry, shouldRemind, hasPastSessions, lastDate }.
+    """
+    last_dt = firestore_client.get_last_session_time(uid)
+    if not last_dt:
+        return {
+            "daysSinceLastEntry": 0.0,
+            "shouldRemind": False,
+            "hasPastSessions": False,
+            "lastDate": None,
+        }
+
+    now_utc = datetime.now(timezone.utc)
+    diff_days = (now_utc - last_dt).total_seconds() / 86400.0
+
+    return {
+        "daysSinceLastEntry": round(diff_days, 1),
+        "shouldRemind": diff_days >= 3.0,
+        "hasPastSessions": True,
+        "lastDate": last_dt.strftime("%b %d, %Y"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# §1 Geotagging + Retrospectives Endpoint (Brief §1)
+# ---------------------------------------------------------------------------
+def _haversine_distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0 # Earth radius in kilometers
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+
+@app.get(
+    "/api/retrospective",
+    tags=["Retrospectives"],
+    summary="Group user's geotagged sessions within ~5km and generate place retrospectives",
+)
+async def get_place_retrospectives(
+    uid: str = Depends(get_verified_uid),
+):
+    """
+    GET /api/retrospective
+    Enforces Rule 9: Location data is strictly scoped under /users/{uid}/sessions.
+    Groups sessions within ~5km of each other.
+    For each cluster with 2+ sessions, calls Gemini once to generate a place retrospective.
+    """
+    geotagged = firestore_client.get_user_geotagged_sessions(uid)
+    if len(geotagged) < 2:
+        return {"retrospectives": []}
+
+    # Cluster sessions within 5.0km radius
+    clusters: List[List[Dict[str, Any]]] = []
+    for sess in geotagged:
+        loc = sess["location"]
+        assigned = False
+        for cluster in clusters:
+            c_loc = cluster[0]["location"]
+            dist = _haversine_distance_km(loc["lat"], loc["lng"], c_loc["lat"], c_loc["lng"])
+            if dist <= 5.0:
+                cluster.append(sess)
+                assigned = True
+                break
+        if not assigned:
+            clusters.append([sess])
+
+    results = []
+    for cluster in clusters:
+        if len(cluster) >= 2:
+            retrospective_narrative = gemini_service.generate_place_retrospective(cluster)
+            dates = [
+                datetime.fromisoformat(s["startedAt"].replace("Z", "+00:00")).strftime("%b %d, %Y")
+                for s in cluster if s.get("startedAt")
+            ]
+            themes = [s.get("extractedTheme") for s in cluster if s.get("extractedTheme")]
+            results.append({
+                "sessionCount": len(cluster),
+                "location": cluster[0]["location"],
+                "dates": dates,
+                "themes": themes,
+                "retrospective": retrospective_narrative,
+            })
+
+    return {"retrospectives": results}
+
+
+# ---------------------------------------------------------------------------
+# §3 Admin / RBAC Metrics Endpoint (Brief §3)
+# ---------------------------------------------------------------------------
+@app.get(
+    "/api/admin/metrics",
+    tags=["Admin"],
+    summary="Get aggregate system metrics (Admin RBAC only)",
+)
+async def get_admin_metrics(
+    admin_claims: Dict[str, Any] = Depends(require_admin),
+):
+    """
+    GET /api/admin/metrics
+    Enforces Rule 9 & §3:
+    - Verifies admin role claim server-side via `require_admin`.
+    - Returns AGGREGATE counts only (counts, not content).
+    - Contains no code path reading messages, summary, or extractedTheme.
+    """
+    metrics = firestore_client.get_aggregate_admin_metrics()
+    return metrics
 
 
 if __name__ == "__main__":

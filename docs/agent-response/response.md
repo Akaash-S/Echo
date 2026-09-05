@@ -106,5 +106,36 @@ To transform Echo from a generic chat interface into a personal reflective journ
 | **Reflection Card (§3)** | **Verified** | Dismissible synthesis card with summary and follow-up question |
 | **Quieted Turns (§4)** | **Verified** | Clean typography-led layout without SMS-style bubbles |
 | **Empty State Prompt (§5)** | **Verified** | Calm, date-anchored prompt line on fresh sessions |
-| **TypeScript & Build** | **Verified** | `npm run build`: built in 3.29s with 0 errors |
+| **TypeScript & Build** | **Verified** | `npm run build`: built with 0 errors |
 | **Git Deployment** | **Verified** | Committed and pushed to `origin/main` |
+
+---
+
+## 6. Final Features Brief Implementation (docs/12-final-features-brief.md)
+
+### 6.1 Security Constitution & Data Model Rule 9 (§0)
+- **Security Rule 9 Added**: Documented in `docs/07-security-constitution.md` and `docs/04-data-model.md`:
+  - Location coordinates stored strictly under `/users/{uid}/sessions/{sessionId}` with same tenant isolation.
+  - Admin RBAC endpoints return strictly aggregate counts and NEVER access session content (`messages`, `summary`, `extractedTheme`).
+  - Custom claim `role == 'admin'` / `admin == True` verified cryptographically via Firebase Admin SDK.
+
+### 6.2 Geotagging & Place Retrospectives (§1)
+- **Data Model**: Added `location: { lat: float, lng: float } | null` to sessions.
+- **Backend APIs**:
+  - `POST /api/session/start` accepts optional `location` in request body.
+  - `GET /api/retrospective` clusters user geotagged sessions within 5.0 km radius (Haversine formula), fetches repeat session themes & summaries, and uses Gemini to synthesize place retrospectives with continuity questions.
+- **Frontend UI**:
+  - Optional location consent bar at the start of new sessions.
+  - "📍 Place Retrospectives" modal accessible from the sidebar.
+
+### 6.3 In-App Reminders (§2)
+- **Backend API**: `GET /api/reminder-status` checks user's latest session timestamp. Returns `shouldRemind: true` and `daysSinceLastEntry` if $\ge 3$ days.
+- **Frontend UI**: Subtle, dismissible warm reminder banner displayed atop the journal chat when returning after 3 or more days of inactivity.
+
+### 6.4 Admin RBAC & Aggregate Metrics (§3)
+- **Backend Security & API**:
+  - `require_admin` dependency in `auth.py` checks decoded token claims and optional `ADMIN_EMAILS` whitelist.
+  - `GET /api/admin/metrics` computes 4 key aggregated metrics: Total Users, Total Sessions, Active Users (Last 7 Days), and Avg Sessions / User. Uses shallow field selections without reading any user conversation text.
+- **Frontend UI**:
+  - "🛡️ Admin Metrics" button and modal in the sidebar displaying aggregate metrics cards.
+

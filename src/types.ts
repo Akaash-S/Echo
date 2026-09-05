@@ -1,3 +1,8 @@
+export interface LocationCoords {
+  lat: number;
+  lng: number;
+}
+
 export interface JournalMessage {
   id?: string;
   role: 'user' | 'model';
@@ -16,6 +21,7 @@ export interface JournalSession {
   followUpQuestion: string | null;
   followUpAsked: boolean;
   followUpReferencedNext: boolean;
+  location?: LocationCoords | null;
   title?: string;
 }
 
@@ -25,6 +31,7 @@ export interface AuthUser {
   displayName: string;
   photoURL?: string;
   token: string;
+  role?: 'user' | 'admin';
 }
 
 export interface StartSessionResponse {
@@ -32,6 +39,7 @@ export interface StartSessionResponse {
   openingMessage: string;
   previousTheme: string | null;
   startedAt: string;
+  location?: LocationCoords | null;
 }
 
 export interface MessageSessionResponse {
@@ -47,4 +55,26 @@ export interface EndSessionResponse {
   sessionId: string;
   endedAt: string;
   followUpAsked: boolean;
+}
+
+export interface ReminderStatusResponse {
+  daysSinceLastEntry: number;
+  shouldRemind: boolean;
+  hasPastSessions: boolean;
+  lastDate: string | null;
+}
+
+export interface PlaceRetrospective {
+  sessionCount: number;
+  location: LocationCoords;
+  dates: string[];
+  themes: string[];
+  retrospective: string;
+}
+
+export interface AdminMetrics {
+  totalUsers: number;
+  totalSessions: number;
+  sessionsLast7Days: number;
+  avgSessionsPerUser: number;
 }

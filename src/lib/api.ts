@@ -1,4 +1,13 @@
-import { JournalSession, StartSessionResponse, MessageSessionResponse, EndSessionResponse } from '../types';
+import {
+  JournalSession,
+  StartSessionResponse,
+  MessageSessionResponse,
+  EndSessionResponse,
+  ReminderStatusResponse,
+  PlaceRetrospective,
+  AdminMetrics,
+  LocationCoords,
+} from '../types';
 
 export class EchoApiClient {
   private token: string;
@@ -47,10 +56,10 @@ export class EchoApiClient {
     return res.json() as Promise<T>;
   }
 
-  async startSession(): Promise<StartSessionResponse> {
+  async startSession(location?: LocationCoords | null): Promise<StartSessionResponse> {
     return this.fetchWithAuth<StartSessionResponse>('/api/session/start', {
       method: 'POST',
-      body: JSON.stringify({}),
+      body: JSON.stringify(location ? { location } : {}),
     });
   }
 
@@ -74,5 +83,17 @@ export class EchoApiClient {
 
   async getSession(sessionId: string): Promise<{ session: JournalSession }> {
     return this.fetchWithAuth<{ session: JournalSession }>(`/api/session/${sessionId}`);
+  }
+
+  async getReminderStatus(): Promise<ReminderStatusResponse> {
+    return this.fetchWithAuth<ReminderStatusResponse>('/api/reminder-status');
+  }
+
+  async getRetrospectives(): Promise<{ retrospectives: PlaceRetrospective[] }> {
+    return this.fetchWithAuth<{ retrospectives: PlaceRetrospective[] }>('/api/retrospective');
+  }
+
+  async getAdminMetrics(): Promise<AdminMetrics> {
+    return this.fetchWithAuth<AdminMetrics>('/api/admin/metrics');
   }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowUp, X, Sparkles, Loader2, Square, AlertCircle, RefreshCw } from 'lucide-react';
-import { JournalSession, JournalMessage, EndSessionResponse } from '../types';
+import { ArrowUp, X, Sparkles, Loader2, Square, AlertCircle, RefreshCw, MapPin, Clock } from 'lucide-react';
+import { JournalSession, JournalMessage, EndSessionResponse, ReminderStatusResponse, LocationCoords } from '../types';
 import { EchoApiClient } from '../lib/api';
 import Markdown from 'react-markdown';
 
@@ -8,11 +8,12 @@ interface JournalChatProps {
   api: EchoApiClient;
   currentSession: JournalSession | null;
   previousTheme: string | null;
+  reminderStatus?: ReminderStatusResponse | null;
   isInitializing?: boolean;
   sessionError?: string | null;
   onSessionUpdated: (session: JournalSession) => void;
   onEndSessionSuccess: (analysis: EndSessionResponse) => void;
-  onStartNewSession: () => void;
+  onStartNewSession: (location?: LocationCoords) => void;
   onRetrySession?: () => void;
 }
 
@@ -20,6 +21,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   api,
   currentSession,
   previousTheme,
+  reminderStatus = null,
   isInitializing = false,
   sessionError = null,
   onSessionUpdated,
@@ -30,6 +32,9 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [locationDismissed, setLocationDismissed] = useState(false);
+  const [reminderDismissed, setReminderDismissed] = useState(false);
   const [endNudge, setEndNudge] = useState<{
     summary: string;
     extractedTheme: string | null;
@@ -42,6 +47,36 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleAttachLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationDismissed(true);
+      return;
+    }
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsGettingLocation(false);
+        setLocationDismissed(true);
+        if (currentSession) {
+          const loc: LocationCoords = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          };
+          onSessionUpdated({
+            ...currentSession,
+            location: loc,
+          });
+        }
+      },
+      (err) => {
+        console.warn('Geolocation denied or unavailable:', err);
+        setIsGettingLocation(false);
+        setLocationDismissed(true);
+      },
+      { timeout: 8000 }
+    );
   };
 
   useEffect(() => {
@@ -217,6 +252,16 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             </>
           )}
 
+          {currentSession?.location && (
+            <>
+              <span>•</span>
+              <span className="text-stone-400 text-[11px] flex items-center gap-1 bg-stone-800/80 px-2 py-0.5 rounded-full">
+                <MapPin className="w-3 h-3 text-amber-400" />
+                <span>Geotagged</span>
+              </span>
+            </>
+          )}
+
           {isSessionEnded && (
             <span className="text-stone-500 italic text-[11px] ml-1">
               (Ended)
@@ -252,6 +297,57 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           )}
         </div>
       </div>
+
+      {/* In-App Reminder Banner (§2) */}
+      {reminderStatus?.shouldRemind && !reminderDismissed && (
+        <div className="bg-amber-950/40 border-b border-amber-800/50 px-6 py-2.5 flex items-center justify-between text-xs text-amber-200">
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              Welcome back. It's been {reminderStatus.daysSinceLastEntry} days since your last reflection. Take a few minutes to untangle your thoughts today.
+            </span>
+          </div>
+          <button
+            onClick={() => setReminderDismissed(true)}
+            className="text-stone-400 hover:text-stone-200 p-1 rounded-md transition-colors cursor-pointer"
+            title="Dismiss reminder"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Geotagging Consent & Prompt (§1) */}
+      {!isSessionEnded && !currentSession?.location && !locationDismissed && !isInitializing && (
+        <div className="bg-stone-850/90 border-b border-stone-800 px-6 py-2.5 flex items-center justify-between text-xs text-stone-300">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Add location to this reflection? Enables place-based retrospectives for repeated visits.</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleAttachLocation}
+              disabled={isGettingLocation}
+              className="text-xs px-2.5 py-1 bg-amber-500/15 border border-amber-500/30 text-amber-300 hover:bg-amber-500/25 rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              {isGettingLocation ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Locating...</span>
+                </>
+              ) : (
+                <span>Add location</span>
+              )}
+            </button>
+            <button
+              onClick={() => setLocationDismissed(true)}
+              className="text-xs px-2 py-1 text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Conversation Column */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">

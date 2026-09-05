@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebaseConfig';
-import { AuthUser, JournalSession, EndSessionResponse } from './types';
+import { AuthUser, JournalSession, EndSessionResponse, ReminderStatusResponse, LocationCoords } from './types';
 import { EchoApiClient } from './lib/api';
 import { AuthScreen } from './components/AuthScreen';
 import { JournalChat } from './components/JournalChat';
 import { Sidebar } from './components/Sidebar';
+import { RetrospectivesModal } from './components/RetrospectivesModal';
+import { AdminModal } from './components/AdminModal';
 import { PanelLeft, Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -14,7 +16,10 @@ export default function App() {
 
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
+  const [reminderStatus, setReminderStatus] = useState<ReminderStatusResponse | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isRetrospectivesOpen, setIsRetrospectivesOpen] = useState(false);
+  const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isInitializingSession, setIsInitializingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -38,6 +43,12 @@ export default function App() {
           setCurrentUser(authUser);
           const client = new EchoApiClient(token);
           setApiClient(client);
+          
+          // Fetch in-app reminder status asynchronously
+          client.getReminderStatus()
+            .then((res) => setReminderStatus(res))
+            .catch((err) => console.warn('Reminder check failed:', err));
+
           await startNewSessionWithClient(client, authUser.uid);
         } catch (err) {
           console.error('Failed to get user token on auth state change:', err);
@@ -53,11 +64,11 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const startNewSessionWithClient = async (client: EchoApiClient, uid: string) => {
+  const startNewSessionWithClient = async (client: EchoApiClient, uid: string, location?: LocationCoords) => {
     setIsInitializingSession(true);
     setSessionError(null);
     try {
-      const startRes = await client.startSession();
+      const startRes = await client.startSession(location);
       const newSession: JournalSession = {
         sessionId: startRes.sessionId,
         userId: uid,
@@ -75,6 +86,7 @@ export default function App() {
         followUpQuestion: null,
         followUpAsked: false,
         followUpReferencedNext: false,
+        location: location || null,
       };
       setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
@@ -88,9 +100,9 @@ export default function App() {
     }
   };
 
-  const handleStartNewSession = () => {
+  const handleStartNewSession = (location?: LocationCoords) => {
     if (apiClient && currentUser) {
-      startNewSessionWithClient(apiClient, currentUser.uid);
+      startNewSessionWithClient(apiClient, currentUser.uid, location);
       setIsSidebarOpen(false);
     }
   };
@@ -157,7 +169,9 @@ export default function App() {
         isOpen={isSidebarOpen}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         onSelectSession={handleSelectPastSession}
-        onNewSession={handleStartNewSession}
+        onNewSession={() => handleStartNewSession()}
+        onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
+        onOpenAdmin={() => setIsAdminOpen(true)}
         onLogout={handleLogout}
         userEmail={currentUser.email}
       />
@@ -182,6 +196,7 @@ export default function App() {
           api={apiClient}
           currentSession={currentSession}
           previousTheme={previousTheme}
+          reminderStatus={reminderStatus}
           isInitializing={isInitializingSession}
           sessionError={sessionError}
           onSessionUpdated={handleSessionUpdated}
@@ -190,6 +205,20 @@ export default function App() {
           onRetrySession={handleRetrySession}
         />
       </div>
+
+      {/* Place Retrospectives Modal (§1) */}
+      <RetrospectivesModal
+        api={apiClient}
+        isOpen={isRetrospectivesOpen}
+        onClose={() => setIsRetrospectivesOpen(false)}
+      />
+
+      {/* Admin Aggregates Modal (§3) */}
+      <AdminModal
+        api={apiClient}
+        isOpen={isAdminOpen}
+        onClose={() => setIsAdminOpen(false)}
+      />
     </div>
   );
 }

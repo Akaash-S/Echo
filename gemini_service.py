@@ -255,3 +255,48 @@ Analyze the transcript and generate JSON with:
             "extractedTheme": "personal reflection and growth",
             "followUpQuestion": "How does reflecting on this situation change how you want to approach it tomorrow?"
         }
+
+def generate_place_retrospective(cluster_sessions: List[Dict[str, Any]]) -> str:
+    """
+    Item 1: Place Retrospective (Brief §1).
+    Generates a concise, thoughtful narrative reflecting on how the user's thoughts
+    and themes have evolved across multiple journal sessions at the same recurring location.
+    """
+    client = get_gemini_client()
+    model_name = get_model_name()
+
+    session_summaries = []
+    for idx, s in enumerate(cluster_sessions, 1):
+        date_str = s.get("startedAt", "")[:10]
+        theme = s.get("extractedTheme") or "reflection"
+        summary = s.get("summary")
+        if not summary and s.get("messages"):
+            user_texts = [m.get("text", "") for m in s["messages"] if m.get("role") == "user"]
+            summary = user_texts[0][:100] if user_texts else "Personal reflection"
+        session_summaries.append(f"- Entry on {date_str} (theme: '{theme}'): {summary}")
+
+    joined_summaries = "\n".join(session_summaries)
+
+    prompt = f"""You are Echo, an empathetic personal AI journal companion.
+The user has recorded multiple reflections while returning to the same physical location.
+Here is what they explored across those visits:
+{joined_summaries}
+
+Write a warm, observant 2-3 sentence retrospective paragraph noticing the emotional threads or growth that occurred in this place. Avoid generic clichés."""
+
+    try:
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=ECHO_SYSTEM_INSTRUCTION,
+                temperature=0.5,
+                max_output_tokens=300,
+            ),
+        )
+        if response.text and response.text.strip():
+            return response.text.strip()
+    except Exception as e:
+        print(f"[Gemini API Error] Error generating place retrospective: {e}")
+
+    return "Across multiple visits to this place, your reflections capture an evolving perspective and a deepening sense of self-awareness."

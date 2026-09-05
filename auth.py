@@ -91,3 +91,23 @@ async def get_verified_uid(
     Ensures routes never trust client-supplied UIDs in request bodies.
     """
     return user_claims["uid"]
+
+async def require_admin(
+    user_claims: Dict[str, Any] = Depends(get_verified_user)
+) -> Dict[str, Any]:
+    """
+    Enforces Admin RBAC per Brief §3 & Security Constitution Rule 9.
+    Verifies that the caller's token contains role == 'admin' or admin == True
+    (or matches configured ADMIN_EMAILS environment variable for test accounts).
+    Raises 403 Forbidden if the caller is not an admin.
+    """
+    admin_claim = user_claims.get("role") == "admin" or user_claims.get("admin") is True
+    admin_emails = [e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "").split(",") if e.strip()]
+    user_email = (user_claims.get("email") or "").lower()
+
+    if not admin_claim and (not user_email or user_email not in admin_emails):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin role required for this endpoint."
+        )
+    return user_claims
