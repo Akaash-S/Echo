@@ -316,13 +316,21 @@ async def list_sessions(
     sessions_ref = firestore_client._get_sessions_collection(db, uid)
     try:
         docs = sessions_ref.order_by("startedAt", direction=firestore_client.Query.DESCENDING).stream()
-        results = [doc.to_dict() for doc in docs]
+        raw_results = [doc.to_dict() for doc in docs]
     except Exception as e:
         logger.warning(f"Fallback listing sessions due to indexing: {e}")
         docs = sessions_ref.stream()
-        results = [doc.to_dict() for doc in docs]
-        results.sort(key=lambda x: x.get("startedAt", ""), reverse=True)
+        raw_results = [doc.to_dict() for doc in docs]
+        raw_results.sort(key=lambda x: x.get("startedAt", ""), reverse=True)
         
+    # Return only sessions that contain user reflections or completed synthesis
+    results = []
+    for s in raw_results:
+        msgs = s.get("messages", [])
+        has_user_msgs = any(m.get("role") == "user" and m.get("text", "").strip() for m in msgs)
+        if has_user_msgs or s.get("summary") or s.get("extractedTheme"):
+            results.append(s)
+
     return {"sessions": results}
 
 

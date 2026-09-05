@@ -48,13 +48,25 @@ export const JournalChat: React.FC<JournalChatProps> = ({
     scrollToBottom();
   }, [currentSession?.messages, isSending, endNudge, isInitializing]);
 
-  // Adjust textarea height dynamically
-  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInputText(e.target.value);
+  // Adjust textarea height dynamically with max limit and smooth scrolling
+  const adjustTextareaHeight = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const maxHeight = 180; // Limit height before scrolling
+      if (scrollHeight > maxHeight) {
+        textareaRef.current.style.height = `${maxHeight}px`;
+        textareaRef.current.style.overflowY = 'auto';
+      } else {
+        textareaRef.current.style.height = `${Math.max(scrollHeight, 38)}px`;
+        textareaRef.current.style.overflowY = 'hidden';
+      }
     }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputText(e.target.value);
+    adjustTextareaHeight();
   };
 
   const handleSendMessage = async (customText?: string) => {
@@ -64,7 +76,8 @@ export const JournalChat: React.FC<JournalChatProps> = ({
     if (!customText) {
       setInputText('');
       if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = '38px';
+        textareaRef.current.style.overflowY = 'hidden';
       }
     }
     setErrorMessage(null);
@@ -136,8 +149,9 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   };
 
   const userMessagesCount = currentSession?.messages.filter((m) => m.role === 'user').length || 0;
+  const isSessionEnded = Boolean(currentSession?.endedAt);
 
-  // Bug 1: If session start failed and there is no active session, show explicit error state with retry
+  // If session start failed and there is no active session, show explicit error state with retry
   if (!currentSession && sessionError && !isInitializing) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 bg-stone-900">
@@ -197,41 +211,49 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           {currentSession?.extractedTheme && (
             <>
               <span>•</span>
-              <span className="text-amber-300/90 font-medium">
+              <span className="text-amber-300/90 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
                 {currentSession.extractedTheme}
               </span>
             </>
           )}
+
+          {isSessionEnded && (
+            <span className="text-stone-500 italic text-[11px] ml-1">
+              (Ended)
+            </span>
+          )}
         </div>
 
         <div>
-          <button
-            id="end-session-action-btn"
-            onClick={handleEndSession}
-            disabled={isEnding || userMessagesCount === 0 || isInitializing}
-            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
-              userMessagesCount > 0 && !isInitializing
-                ? 'border-stone-700 text-stone-300 hover:border-amber-500/50 hover:text-amber-300 bg-stone-850 cursor-pointer'
-                : 'border-stone-800 text-stone-400 cursor-not-allowed opacity-50'
-            }`}
-            title={userMessagesCount === 0 ? 'Add at least one entry before ending' : 'End & synthesize session'}
-          >
-            {isEnding ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Synthesizing...</span>
-              </>
-            ) : (
-              <>
-                <Square className="w-3 h-3 text-stone-400" />
-                <span>End session</span>
-              </>
-            )}
-          </button>
+          {!isSessionEnded && (
+            <button
+              id="end-session-action-btn"
+              onClick={handleEndSession}
+              disabled={isEnding || userMessagesCount === 0 || isInitializing}
+              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+                userMessagesCount > 0 && !isInitializing
+                  ? 'border-stone-700 text-stone-300 hover:border-amber-500/50 hover:text-amber-300 bg-stone-850 cursor-pointer'
+                  : 'border-stone-800 text-stone-400 cursor-not-allowed opacity-50'
+              }`}
+              title={userMessagesCount === 0 ? 'Add at least one entry before ending' : 'End & synthesize session'}
+            >
+              {isEnding ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Synthesizing...</span>
+                </>
+              ) : (
+                <>
+                  <Square className="w-3 h-3 text-stone-400" />
+                  <span>End session</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Conversation Column (Bug 3: Mounted instantly) */}
+      {/* Main Conversation Column */}
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
         <div className="max-w-2xl mx-auto space-y-8">
           {errorMessage && (
@@ -240,7 +262,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             </div>
           )}
 
-          {/* Bug 3: Loading Skeleton for Opening Message while backend resolves */}
+          {/* Loading Skeleton for Opening Message while backend connects */}
           {isInitializing && (!currentSession || currentSession.messages.length === 0) && (
             <div className="flex flex-col items-start space-y-2">
               <div className="text-[11px] text-stone-500 font-medium px-1 tracking-wider uppercase">
@@ -255,13 +277,13 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             </div>
           )}
 
-          {/* Message Turns */}
+          {/* Message Turns with Symmetrical Margin Pipes */}
           {currentSession?.messages.map((msg, index) => {
             const isUser = msg.role === 'user';
             const isFirstOpener = index === 0 && !isUser;
             const isThemedCallback = isFirstOpener && Boolean(previousTheme && previousTheme.trim());
 
-            // 2. Themed Opener Card: Visibly distinct memory callback
+            // Themed Opener Card: Visibly distinct memory callback
             if (isThemedCallback) {
               return (
                 <div key={msg.id || index} className="w-full my-2">
@@ -273,7 +295,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                         • from "{previousTheme}"
                       </span>
                     </div>
-                    <div className="text-sm text-stone-200 leading-relaxed font-serif">
+                    <div className="text-sm text-stone-200 leading-relaxed font-serif pl-3 border-l-2 border-amber-500/60">
                       <Markdown>{msg.text}</Markdown>
                     </div>
                   </div>
@@ -281,23 +303,23 @@ export const JournalChat: React.FC<JournalChatProps> = ({
               );
             }
 
-            // 4. Message Styling: Typography-led with generous whitespace (no loud colored bubbles)
+            // Message Styling: Typography-led with bilateral margin pipes
             return (
               <div
                 key={msg.id || index}
-                className={`flex flex-col ${isUser ? 'items-end ml-auto' : 'items-start mr-auto'} max-w-[90%] sm:max-w-[85%]`}
+                className={`flex flex-col ${isUser ? 'items-end ml-auto' : 'items-start mr-auto'} max-w-[92%] sm:max-w-[88%]`}
               >
-                {/* Quiet Role Label */}
+                {/* Role Label */}
                 <div className="text-[11px] text-stone-500 font-medium mb-1.5 px-1 tracking-wider uppercase">
                   {isUser ? 'You' : 'Echo'}
                 </div>
 
-                {/* Turn Body */}
+                {/* Turn Body with Pipe Accent */}
                 <div
                   className={`text-sm leading-relaxed ${
                     isUser
-                      ? 'text-stone-100 bg-transparent pl-3 pr-1 py-1 font-normal border-r-2 border-stone-600/80'
-                      : 'text-stone-200 bg-transparent px-1 py-1 font-serif'
+                      ? 'text-stone-100 bg-transparent pl-3 pr-3 py-1 font-normal border-r-2 border-stone-600/90'
+                      : 'text-stone-200 bg-transparent pl-3 pr-1 py-1 font-serif border-l-2 border-stone-600/90'
                   }`}
                 >
                   {isUser ? (
@@ -317,7 +339,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
               <div className="text-[11px] text-stone-500 font-medium mb-1 px-1 tracking-wider uppercase">
                 Echo
               </div>
-              <div className="flex items-center gap-1.5 text-stone-400 text-xs py-2 px-1">
+              <div className="flex items-center gap-1.5 text-stone-400 text-xs py-2 pl-3 border-l-2 border-amber-500/40">
                 <span className="w-1.5 h-1.5 bg-amber-400/80 rounded-full animate-pulse" />
                 <span className="w-1.5 h-1.5 bg-amber-400/80 rounded-full animate-pulse [animation-delay:0.2s]" />
                 <span className="w-1.5 h-1.5 bg-amber-400/80 rounded-full animate-pulse [animation-delay:0.4s]" />
@@ -325,111 +347,119 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             </div>
           )}
 
+          {/* Persistent End-of-Session Reflection Summary inside conversation stream */}
+          {(endNudge || (isSessionEnded && currentSession?.summary)) && (
+            <div className="w-full my-4 pt-4 border-t border-stone-800/80">
+              <div className="bg-stone-850/90 border border-stone-750 rounded-2xl p-5 shadow-lg relative transition-all space-y-3">
+                {endNudge && (
+                  <button
+                    onClick={() => setEndNudge(null)}
+                    className="absolute top-3.5 right-3.5 text-stone-400 hover:text-stone-200 p-1 rounded-md transition-colors cursor-pointer"
+                    title="Dismiss notification"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+
+                <div className="flex items-center gap-2 text-xs font-medium text-amber-300/90">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>Session Concluded</span>
+                  {(endNudge?.extractedTheme || currentSession?.extractedTheme) && (
+                    <span className="text-[11px] bg-amber-500/10 text-amber-300/90 border border-amber-500/20 px-2 py-0.5 rounded-full font-sans font-medium">
+                      {endNudge?.extractedTheme || currentSession?.extractedTheme}
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed pl-3 border-l-2 border-amber-500/40">
+                  {endNudge?.summary || currentSession?.summary}
+                </p>
+
+                {(endNudge?.followUpQuestion || currentSession?.followUpQuestion) && (
+                  <div className="bg-stone-900/90 border border-stone-800/90 rounded-xl p-3.5">
+                    <div className="text-[11px] text-amber-300/80 mb-1 font-medium tracking-wide uppercase">
+                      Between now and your next session:
+                    </div>
+                    <div className="text-xs text-stone-200 font-serif italic leading-relaxed">
+                      "{endNudge?.followUpQuestion || currentSession?.followUpQuestion}"
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state prompt line */}
+          {userMessagesCount === 0 && !isInitializing && !previousTheme && (
+            <div className="w-full text-center py-4">
+              <p className="text-[11px] text-stone-500 italic font-serif">
+                Today is {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}. This is your private space to reflect, untangle thoughts, or brainstorm.
+              </p>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* 3. End-of-Session Reflection Card: summary + followUpQuestion (dismissible, non-blocking) */}
-      {endNudge && (
-        <div className="max-w-2xl w-full mx-auto px-4 sm:px-6 mb-3">
-          <div className="bg-stone-850 border border-stone-750 rounded-2xl p-5 shadow-lg relative transition-all space-y-3">
-            <button
-              onClick={() => setEndNudge(null)}
-              className="absolute top-3.5 right-3.5 text-stone-400 hover:text-stone-200 p-1 rounded-md transition-colors cursor-pointer"
-              title="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="flex items-center gap-2 text-xs font-medium text-amber-300/90">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>Session Concluded</span>
-              {endNudge.extractedTheme && (
-                <span className="text-[11px] bg-amber-500/10 text-amber-300/90 border border-amber-500/20 px-2 py-0.5 rounded-full font-sans">
-                  {endNudge.extractedTheme}
-                </span>
-              )}
-            </div>
-
-            <p className="text-xs text-stone-300 leading-relaxed">
-              {endNudge.summary}
-            </p>
-
-            <div className="bg-stone-900/90 border border-stone-800/90 rounded-xl p-3.5">
-              <div className="text-[11px] text-amber-300/80 mb-1 font-medium tracking-wide uppercase">
-                Between now and your next session:
-              </div>
-              <div className="text-xs text-stone-200 font-serif italic leading-relaxed">
-                "{endNudge.followUpQuestion}"
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 justify-end pt-1">
-              <button
-                onClick={() => setEndNudge(null)}
-                className="px-3 py-1.5 text-xs text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
-              >
-                Dismiss
-              </button>
-              <button
-                onClick={handleRespondToNudge}
-                className="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-500 text-stone-950 font-medium rounded-lg transition-colors cursor-pointer"
-              >
-                Reflect further
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 5. New-Session Calm Prompt Line: date-anchored quiet placeholder before user's first message */}
-      {userMessagesCount === 0 && !isInitializing && !previousTheme && (
-        <div className="max-w-2xl w-full mx-auto px-6 mb-2 text-center">
-          <p className="text-[11px] text-stone-500 italic font-serif">
-            Today is {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}. This is your private space to reflect, untangle thoughts, or brainstorm.
-          </p>
-        </div>
-      )}
-
-      {/* Composer fixed at bottom */}
+      {/* Bottom Area: Completed Status Bar vs. Active Dynamic Composer */}
       <div className="border-t border-stone-800/80 bg-stone-900/95 backdrop-blur-md px-4 sm:px-6 py-4 shrink-0">
         <div className="max-w-2xl mx-auto">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-end gap-2 bg-stone-850 border border-stone-750 focus-within:border-stone-600 rounded-2xl p-2.5 transition-colors"
-          >
-            <textarea
-              ref={textareaRef}
-              id="composer-textarea"
-              value={inputText}
-              onChange={handleTextChange}
-              onKeyDown={handleKeyDown}
-              rows={1}
-              placeholder={isInitializing ? 'Preparing session... you can start typing' : "What's on your mind?"}
-              className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-400 focus:outline-none resize-none px-2 py-1 max-h-48 leading-relaxed"
-            />
-
-            <button
-              type="submit"
-              id="send-message-button"
-              disabled={!inputText.trim() || isSending || isInitializing || !currentSession}
-              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
-                inputText.trim() && !isSending && !isInitializing && currentSession
-                  ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer'
-                  : 'bg-stone-800 text-stone-400 cursor-not-allowed opacity-60'
-              }`}
-              title={isInitializing ? 'Connecting to Echo...' : 'Send (Enter)'}
+          {isSessionEnded ? (
+            <div className="flex items-center justify-between gap-4 bg-stone-850/90 border border-stone-750 rounded-2xl p-3 px-4">
+              <div className="flex items-center gap-2 text-xs text-stone-300">
+                <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+                <span>This reflection is completed & saved.</span>
+              </div>
+              <button
+                onClick={onStartNewSession}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm shrink-0"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Start New Session</span>
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendMessage();
+              }}
+              className="flex items-end gap-2 bg-stone-850 border border-stone-750 focus-within:border-stone-600 rounded-2xl p-2.5 transition-colors"
             >
-              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
-            </button>
-          </form>
+              <textarea
+                ref={textareaRef}
+                id="composer-textarea"
+                value={inputText}
+                onChange={handleTextChange}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                placeholder={isInitializing ? 'Preparing session... you can start typing' : "What's on your mind?"}
+                className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-400 focus:outline-none resize-none px-2 py-1 leading-relaxed max-h-[180px] overflow-hidden"
+                style={{ minHeight: '38px' }}
+              />
 
-          <div className="text-[11px] text-stone-400 text-center mt-2 font-mono">
-            {isInitializing ? 'Connecting to secure session...' : 'Return to send • Shift + Return for new line'}
-          </div>
+              <button
+                type="submit"
+                id="send-message-button"
+                disabled={!inputText.trim() || isSending || isInitializing || !currentSession}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                  inputText.trim() && !isSending && !isInitializing && currentSession
+                    ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer'
+                    : 'bg-stone-800 text-stone-400 cursor-not-allowed opacity-60'
+                }`}
+                title={isInitializing ? 'Connecting to Echo...' : 'Send (Enter)'}
+              >
+                <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </form>
+          )}
+
+          {!isSessionEnded && (
+            <div className="text-[11px] text-stone-400 text-center mt-2 font-mono">
+              {isInitializing ? 'Connecting to secure session...' : 'Return to send • Shift + Return for new line'}
+            </div>
+          )}
         </div>
       </div>
     </div>

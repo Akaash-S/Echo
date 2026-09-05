@@ -44,6 +44,20 @@ def create_session(
     - followUpReferencedNext: false
     """
     db = get_db()
+    sessions_coll = _get_sessions_collection(db, uid)
+
+    # Clean up empty abandoned sessions (0 user messages and not ended)
+    try:
+        recent_docs = sessions_coll.order_by("startedAt", direction=Query.DESCENDING).limit(5).stream()
+        for doc in recent_docs:
+            d = doc.to_dict()
+            msgs = d.get("messages", [])
+            has_user = any(m.get("role") == "user" and m.get("text", "").strip() for m in msgs)
+            if not has_user and not d.get("endedAt") and not d.get("extractedTheme"):
+                doc.reference.delete()
+    except Exception as e:
+        pass
+
     session_id = f"sess_{uuid.uuid4().hex[:16]}"
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -66,7 +80,7 @@ def create_session(
         "followUpReferencedNext": False,
     }
 
-    session_ref = _get_sessions_collection(db, uid).document(session_id)
+    session_ref = sessions_coll.document(session_id)
     session_ref.set(session_data)
 
     return session_data

@@ -79,20 +79,19 @@ def generate_opening_prompt(previous_theme: Optional[str] = None) -> str:
     """
     Generates the opening message for a new journal session.
     
-    - Next-session callback (§3.5 B): If a previous theme exists, references it naturally.
-    - Generic warm opener: If no previous theme exists (first session), invites open reflection.
+    - Next-session callback (§3.5 B): If a previous theme exists, calls Gemini to reference it.
+    - Generic warm opener: Returns an instant warm greeting to eliminate session start latency.
     """
+    if not previous_theme or not previous_theme.strip():
+        return "Welcome to Echo. This is your private space to reflect, untangle thoughts, or brainstorm. What's on your mind today?"
+
     client = get_gemini_client()
     model_name = get_model_name()
     
-    if previous_theme and previous_theme.strip():
-        user_prompt = f"""Generate a warm, natural 1-2 sentence opening message for a returning user.
+    user_prompt = f"""Generate a warm, natural 1-2 sentence opening message for a returning user.
 In their last session, they explored the theme: "{previous_theme.strip()}".
 Acknowledge this theme gently (e.g. "Last time we touched on {previous_theme.strip()} — how has that been sitting with you, or is there something fresh on your mind today?").
 Do not be intrusive or forceful; invite them to either continue that thread or explore whatever is present for them now."""
-    else:
-        user_prompt = """Generate a warm, inviting 1-2 sentence opening greeting welcoming the user to their journaling session.
-Invite them to share whatever thought, feeling, idea, or challenge is taking up space in their mind today without pressure."""
 
     print(f"[Gemini API Call] Invoking model '{model_name}' for opening prompt (previous_theme={previous_theme!r})...")
     logger.info(f"Invoking Gemini model {model_name} for opening prompt (theme={previous_theme})")
@@ -104,7 +103,7 @@ Invite them to share whatever thought, feeling, idea, or challenge is taking up 
             config=types.GenerateContentConfig(
                 system_instruction=ECHO_SYSTEM_INSTRUCTION,
                 temperature=0.7,
-                max_output_tokens=300,
+                max_output_tokens=150,
             ),
         )
         if response.text and response.text.strip():
@@ -112,11 +111,9 @@ Invite them to share whatever thought, feeling, idea, or challenge is taking up 
             return response.text.strip()
     except Exception as e:
         print(f"[Gemini API Error] Error calling Gemini for opening prompt: {e}")
-        if previous_theme:
-            return f"Welcome back! Last time you were reflecting on '{previous_theme}'. How is that sitting with you today, or is there a fresh thought on your mind?"
-        return "Welcome to Echo. This is your private space to reflect, untangle thoughts, or brainstorm. What's on your mind today?"
+        return f"Welcome back! Last time you were reflecting on '{previous_theme}'. How is that sitting with you today, or is there a fresh thought on your mind?"
 
-    return "Welcome to Echo. What's on your mind today?"
+    return f"Welcome back! Last time we were exploring '{previous_theme}'. What would you like to reflect on today?"
 
 def generate_conversation_turn(messages: List[Dict[str, Any]]) -> str:
     """
