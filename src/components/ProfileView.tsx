@@ -104,7 +104,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={onStartNewSession}
+            onClick={() => onStartNewSession()}
             className="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-medium rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
