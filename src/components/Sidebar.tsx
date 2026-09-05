@@ -7,6 +7,7 @@ interface SidebarProps {
   api: EchoApiClient;
   currentSessionId: string | null;
   isOpen: boolean;
+  activeView?: 'journal' | 'profile';
   onToggle: () => void;
   onSelectSession: (session: JournalSession) => void;
   onNewSession: () => void;
@@ -23,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   api,
   currentSessionId,
   isOpen,
+  activeView = 'journal',
   onToggle,
   onSelectSession,
   onNewSession,
@@ -180,22 +182,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-3 border-t border-stone-800/80 shrink-0 flex items-center justify-between text-xs text-stone-400 gap-2">
           <button
             onClick={onOpenProfile}
-            className="flex-1 flex items-center gap-2.5 min-w-0 p-1.5 -ml-1 rounded-xl hover:bg-stone-900 transition-colors text-left cursor-pointer group"
-            title="View Profile & Insights"
+            className={`flex-1 flex items-center gap-2.5 min-w-0 p-2 -ml-1 rounded-xl transition-all text-left cursor-pointer group border ${
+              activeView === 'profile'
+                ? 'bg-stone-850 border-stone-700 shadow-xs'
+                : 'bg-transparent border-transparent hover:bg-stone-900 hover:border-stone-800/80'
+            }`}
+            title="View Profile Page & Personal Insights"
           >
             {photoURL ? (
               <img
                 src={photoURL}
                 alt={displayName || 'User'}
-                className="w-7 h-7 rounded-full border border-stone-700 object-cover shrink-0 group-hover:border-amber-500/50"
+                className={`w-7 h-7 rounded-full border object-cover shrink-0 ${
+                  activeView === 'profile' ? 'border-amber-400' : 'border-stone-700 group-hover:border-amber-500/50'
+                }`}
               />
             ) : (
-              <div className="w-7 h-7 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-amber-300 font-serif text-xs shrink-0 group-hover:border-amber-500/50">
+              <div className={`w-7 h-7 rounded-full bg-stone-800 border flex items-center justify-center text-amber-300 font-serif text-xs shrink-0 ${
+                activeView === 'profile' ? 'border-amber-400' : 'border-stone-700 group-hover:border-amber-500/50'
+              }`}>
                 {displayName ? displayName.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
               </div>
             )}
             <div className="flex-1 min-w-0">
-              <div className="text-stone-200 font-medium truncate group-hover:text-amber-200 text-xs">
+              <div className={`font-medium truncate text-xs ${
+                activeView === 'profile' ? 'text-amber-200' : 'text-stone-200 group-hover:text-amber-200'
+              }`}>
                 {displayName || 'Journaler'}
               </div>
               <div className="truncate text-stone-500 text-[11px]" title={userEmail}>

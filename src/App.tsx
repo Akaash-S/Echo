@@ -8,20 +8,20 @@ import { JournalChat } from './components/JournalChat';
 import { Sidebar } from './components/Sidebar';
 import { RetrospectivesModal } from './components/RetrospectivesModal';
 import { AdminModal } from './components/AdminModal';
-import { ProfileModal } from './components/ProfileModal';
+import { ProfileView } from './components/ProfileView';
 import { PanelLeft, Loader2 } from 'lucide-react';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState(true);
 
+  const [activeView, setActiveView] = useState<'journal' | 'profile'>('journal');
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatusResponse | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRetrospectivesOpen, setIsRetrospectivesOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isInitializingSession, setIsInitializingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -92,6 +92,7 @@ export default function App() {
       };
       setCurrentSession(newSession);
       setPreviousTheme(startRes.previousTheme);
+      setActiveView('journal');
     } catch (err: any) {
       console.error('Failed to start session with backend API', err);
       // Bug 1 fix: Do NOT fabricate fake local sessions! Set explicit error state
@@ -106,12 +107,14 @@ export default function App() {
     if (apiClient && currentUser) {
       startNewSessionWithClient(apiClient, currentUser.uid, location);
       setIsSidebarOpen(false);
+      setActiveView('journal');
     }
   };
 
   const handleRetrySession = () => {
     if (apiClient && currentUser) {
       startNewSessionWithClient(apiClient, currentUser.uid);
+      setActiveView('journal');
     }
   };
 
@@ -137,6 +140,7 @@ export default function App() {
     setPreviousTheme(null);
     setSessionError(null);
     setIsSidebarOpen(false);
+    setActiveView('journal');
   };
 
   const handleLogout = async () => {
@@ -169,19 +173,23 @@ export default function App() {
         api={apiClient}
         currentSessionId={currentSession?.sessionId || null}
         isOpen={isSidebarOpen}
+        activeView={activeView}
         onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
         onSelectSession={handleSelectPastSession}
         onNewSession={() => handleStartNewSession()}
         onOpenRetrospectives={() => setIsRetrospectivesOpen(true)}
         onOpenAdmin={() => setIsAdminOpen(true)}
-        onOpenProfile={() => setIsProfileOpen(true)}
+        onOpenProfile={() => {
+          setActiveView('profile');
+          setIsSidebarOpen(false);
+        }}
         onLogout={handleLogout}
         userEmail={currentUser.email}
         displayName={currentUser.displayName}
         photoURL={currentUser.photoURL}
       />
 
-      {/* Main Panel */}
+      {/* Main Panel Viewport */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         {/* Mobile Header / Sidebar Toggle */}
         <div className="lg:hidden h-12 border-b border-stone-800 px-4 flex items-center justify-between bg-stone-950 shrink-0">
@@ -196,29 +204,31 @@ export default function App() {
           <div className="w-5" />
         </div>
 
-        {/* Conversation Column */}
-        <JournalChat
-          api={apiClient}
-          currentSession={currentSession}
-          previousTheme={previousTheme}
-          reminderStatus={reminderStatus}
-          isInitializing={isInitializingSession}
-          sessionError={sessionError}
-          onSessionUpdated={handleSessionUpdated}
-          onEndSessionSuccess={handleEndSessionSuccess}
-          onStartNewSession={handleStartNewSession}
-          onRetrySession={handleRetrySession}
-        />
+        {/* Dynamic View: Journal Conversation vs. User Profile Page */}
+        {activeView === 'journal' ? (
+          <JournalChat
+            api={apiClient}
+            currentSession={currentSession}
+            previousTheme={previousTheme}
+            reminderStatus={reminderStatus}
+            isInitializing={isInitializingSession}
+            sessionError={sessionError}
+            onSessionUpdated={handleSessionUpdated}
+            onEndSessionSuccess={handleEndSessionSuccess}
+            onStartNewSession={handleStartNewSession}
+            onRetrySession={handleRetrySession}
+          />
+        ) : (
+          <ProfileView
+            api={apiClient}
+            user={currentUser}
+            onBackToJournal={() => setActiveView('journal')}
+            onSelectSession={handleSelectPastSession}
+            onStartNewSession={() => handleStartNewSession()}
+            onLogout={handleLogout}
+          />
+        )}
       </div>
-
-      {/* User Profile & Insights Modal */}
-      <ProfileModal
-        api={apiClient}
-        user={currentUser}
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        onLogout={handleLogout}
-      />
 
       {/* Place Retrospectives Modal (§1) */}
       <RetrospectivesModal
