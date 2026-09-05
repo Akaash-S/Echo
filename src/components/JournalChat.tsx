@@ -198,7 +198,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           {sessionError}
         </p>
         <button
-          onClick={onRetrySession || onStartNewSession}
+          onClick={() => (onRetrySession ? onRetrySession() : onStartNewSession())}
           className="px-4 py-2 bg-stone-800 hover:bg-stone-750 text-stone-200 hover:text-white border border-stone-700 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
         >
           <RefreshCw className="w-4 h-4" />
@@ -217,7 +217,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           Begin a clean session to reflect, think out loud, or brainstorm.
         </p>
         <button
-          onClick={onStartNewSession}
+          onClick={() => onStartNewSession()}
           className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-medium rounded-lg text-sm transition-colors cursor-pointer"
         >
           Start new session
@@ -508,7 +508,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 <span>This reflection is completed & saved.</span>
               </div>
               <button
-                onClick={onStartNewSession}
+                onClick={() => onStartNewSession()}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5" />
