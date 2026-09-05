@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowUp, X, Sparkles, Loader2, Square, AlertCircle, RefreshCw, MapPin, Clock } from 'lucide-react';
+import { ArrowUp, X, Sparkles, Loader2, Square, AlertCircle, RefreshCw, MapPin, Clock, MessageSquarePlus, Compass, ArrowRight } from 'lucide-react';
 import { JournalSession, JournalMessage, EndSessionResponse, ReminderStatusResponse, LocationCoords } from '../types';
 import { EchoApiClient } from '../lib/api';
 import Markdown from 'react-markdown';
@@ -11,9 +11,11 @@ interface JournalChatProps {
   reminderStatus?: ReminderStatusResponse | null;
   isInitializing?: boolean;
   sessionError?: string | null;
+  initialPrompt?: string | null;
+  onClearInitialPrompt?: () => void;
   onSessionUpdated: (session: JournalSession) => void;
   onEndSessionSuccess: (analysis: EndSessionResponse) => void;
-  onStartNewSession: (location?: LocationCoords) => void;
+  onStartNewSession: (location?: LocationCoords, initialPrompt?: string) => void;
   onRetrySession?: () => void;
 }
 
@@ -24,6 +26,8 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   reminderStatus = null,
   isInitializing = false,
   sessionError = null,
+  initialPrompt = null,
+  onClearInitialPrompt,
   onSessionUpdated,
   onEndSessionSuccess,
   onStartNewSession,
@@ -32,8 +36,6 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
-  const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [locationDismissed, setLocationDismissed] = useState(false);
   const [reminderDismissed, setReminderDismissed] = useState(false);
   const [endNudge, setEndNudge] = useState<{
     summary: string;
@@ -49,35 +51,21 @@ export const JournalChat: React.FC<JournalChatProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleAttachLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationDismissed(true);
-      return;
-    }
-    setIsGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setIsGettingLocation(false);
-        setLocationDismissed(true);
-        if (currentSession) {
-          const loc: LocationCoords = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          };
-          onSessionUpdated({
-            ...currentSession,
-            location: loc,
-          });
+  // Listen for initialPrompt to pre-fill and focus
+  useEffect(() => {
+    if (initialPrompt && initialPrompt.trim()) {
+      setInputText(initialPrompt);
+      if (onClearInitialPrompt) {
+        onClearInitialPrompt();
+      }
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          adjustTextareaHeight();
         }
-      },
-      (err) => {
-        console.warn('Geolocation denied or unavailable:', err);
-        setIsGettingLocation(false);
-        setLocationDismissed(true);
-      },
-      { timeout: 8000 }
-    );
-  };
+      }, 50);
+    }
+  }, [initialPrompt]);
 
   useEffect(() => {
     scrollToBottom();
@@ -105,10 +93,10 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   };
 
   const handleSendMessage = async (customText?: string) => {
-    const textToSend = customText || inputText.trim();
+    const textToSend = (customText !== undefined ? customText : inputText).trim();
     if (!textToSend || isSending || !currentSession || isInitializing) return;
 
-    if (!customText) {
+    if (customText === undefined) {
       setInputText('');
       if (textareaRef.current) {
         textareaRef.current.style.height = '38px';
@@ -174,15 +162,6 @@ export const JournalChat: React.FC<JournalChatProps> = ({
     }
   };
 
-  const handleRespondToNudge = () => {
-    if (!endNudge) return;
-    setInputText(`Reflecting on: "${endNudge.followUpQuestion}" — `);
-    setEndNudge(null);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
   const userMessagesCount = currentSession?.messages.filter((m) => m.role === 'user').length || 0;
   const isSessionEnded = Boolean(currentSession?.endedAt);
 
@@ -199,7 +178,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </p>
         <button
           onClick={() => (onRetrySession ? onRetrySession() : onStartNewSession())}
-          className="px-4 py-2 bg-stone-800 hover:bg-stone-750 text-stone-200 hover:text-white border border-stone-700 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
+          className="px-4 py-2 bg-stone-850 hover:bg-stone-800 text-stone-200 hover:text-white border border-stone-700 rounded-xl text-sm font-medium transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
         >
           <RefreshCw className="w-4 h-4" />
           <span>Retry starting session</span>
@@ -212,15 +191,19 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   if (!currentSession && !isInitializing) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 bg-stone-900">
-        <h2 className="text-xl font-serif text-stone-200 mb-2 font-normal">No active session</h2>
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4 text-amber-400">
+          <Sparkles className="w-6 h-6" />
+        </div>
+        <h2 className="text-xl font-serif text-stone-200 mb-2 font-normal">No active reflection</h2>
         <p className="text-sm max-w-sm mb-6 text-stone-400">
           Begin a clean session to reflect, think out loud, or brainstorm.
         </p>
         <button
           onClick={() => onStartNewSession()}
-          className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-medium rounded-lg text-sm transition-colors cursor-pointer"
+          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-xl text-sm transition-colors cursor-pointer shadow-sm flex items-center gap-2"
         >
-          Start new session
+          <Sparkles className="w-4 h-4" />
+          <span>Start new reflection</span>
         </button>
       </div>
     );
@@ -229,7 +212,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-stone-900 text-stone-100">
       {/* Top toolbar */}
-      <div className="h-14 border-b border-stone-800/80 px-6 flex items-center justify-between shrink-0">
+      <div className="h-14 border-b border-stone-800/80 px-6 flex items-center justify-between shrink-0 bg-stone-900/90 backdrop-blur-md">
         <div className="flex items-center gap-2 text-xs text-stone-400">
           {currentSession ? (
             <span>
@@ -269,22 +252,33 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           )}
         </div>
 
-        <div>
+        <div className="flex items-center gap-2">
+          {isSessionEnded && (
+            <button
+              onClick={() => onStartNewSession(undefined, currentSession?.extractedTheme ? `Continuing my reflection on "${currentSession.extractedTheme}": ` : undefined)}
+              className="text-xs px-3 py-1.5 rounded-xl border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 bg-stone-850 font-medium transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Start a new conversation inspired by this reflection"
+            >
+              <MessageSquarePlus className="w-3.5 h-3.5 text-amber-400" />
+              <span>Start in new conversation</span>
+            </button>
+          )}
+
           {!isSessionEnded && (
             <button
               id="end-session-action-btn"
               onClick={handleEndSession}
               disabled={isEnding || userMessagesCount === 0 || isInitializing}
-              className={`text-xs px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-1.5 ${
+              className={`text-xs px-3 py-1.5 rounded-xl border transition-colors flex items-center gap-1.5 font-medium ${
                 userMessagesCount > 0 && !isInitializing
-                  ? 'border-stone-700 text-stone-300 hover:border-amber-500/50 hover:text-amber-300 bg-stone-850 cursor-pointer'
+                  ? 'border-stone-700 text-stone-300 hover:border-amber-500/50 hover:text-amber-300 bg-stone-850 cursor-pointer shadow-xs'
                   : 'border-stone-800 text-stone-400 cursor-not-allowed opacity-50'
               }`}
               title={userMessagesCount === 0 ? 'Add at least one entry before ending' : 'End & synthesize session'}
             >
               {isEnding ? (
                 <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
                   <span>Synthesizing...</span>
                 </>
               ) : (
@@ -321,8 +315,68 @@ export const JournalChat: React.FC<JournalChatProps> = ({
       <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-8">
         <div className="max-w-2xl mx-auto space-y-8">
           {errorMessage && (
-            <div className="p-3 bg-stone-850 border border-rose-900/60 rounded-xl text-xs text-rose-300">
+            <div className="p-3.5 bg-stone-850 border border-rose-900/60 rounded-2xl text-xs text-rose-300">
               {errorMessage}
+            </div>
+          )}
+
+          {/* If viewing a completed/saved past session: render prominent Reflection Highlight Banner at top */}
+          {isSessionEnded && currentSession?.summary && (
+            <div className="w-full animate-in fade-in duration-300">
+              <div className="bg-gradient-to-br from-amber-950/30 via-stone-850/90 to-stone-900/90 border border-amber-500/30 rounded-3xl p-6 shadow-md space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-amber-300 uppercase tracking-wider">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>Reflection Highlight & Synthesis</span>
+                  </div>
+                  {currentSession.extractedTheme && (
+                    <span className="text-xs bg-amber-500/15 text-amber-200 border border-amber-500/30 px-3 py-1 rounded-full font-medium">
+                      {currentSession.extractedTheme}
+                    </span>
+                  )}
+                </div>
+
+                <div className="text-sm text-stone-200 leading-relaxed font-serif pl-3.5 border-l-2 border-amber-500/60">
+                  {currentSession.summary}
+                </div>
+
+                {currentSession.followUpQuestion && (
+                  <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 space-y-1.5">
+                    <div className="text-[11px] text-amber-300/80 font-medium tracking-wide uppercase flex items-center gap-1.5">
+                      <Compass className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Takeaway for future reflection:</span>
+                    </div>
+                    <div className="text-xs text-stone-200 font-serif italic leading-relaxed">
+                      "{currentSession.followUpQuestion}"
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex flex-wrap items-center gap-2.5 border-t border-stone-800/80">
+                  <button
+                    onClick={() =>
+                      onStartNewSession(
+                        undefined,
+                        currentSession.extractedTheme
+                          ? `Continuing from our reflection on "${currentSession.extractedTheme}": `
+                          : currentSession.followUpQuestion
+                          ? `Reflecting on "${currentSession.followUpQuestion}": `
+                          : undefined
+                      )
+                    }
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <MessageSquarePlus className="w-4 h-4" />
+                    <span>Start this in a new conversation</span>
+                  </button>
+                  <button
+                    onClick={() => onStartNewSession()}
+                    className="px-3.5 py-2 bg-stone-800 hover:bg-stone-750 text-stone-300 text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    Start fresh topic
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -347,19 +401,67 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             const isFirstOpener = index === 0 && !isUser;
             const isThemedCallback = isFirstOpener && Boolean(previousTheme && previousTheme.trim());
 
-            // Themed Opener Card: Visibly distinct memory callback
+            // Themed Opener Card: Visibly distinct memory callback with action button
             if (isThemedCallback) {
               return (
-                <div key={msg.id || index} className="w-full my-2">
-                  <div className="bg-stone-850/80 border border-amber-500/25 rounded-2xl p-5 shadow-xs space-y-3">
-                    <div className="flex items-center gap-2 text-[11px] font-medium text-amber-300/90 tracking-wide uppercase">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>Echo remembers</span>
-                      <span className="text-stone-400 normal-case font-normal font-sans">
-                        • from "{previousTheme}"
+                <div key={msg.id || index} className="w-full my-2 animate-in fade-in duration-300">
+                  <div className="bg-gradient-to-b from-amber-950/20 via-stone-850/90 to-stone-900/90 border border-amber-500/30 rounded-3xl p-6 shadow-md space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-amber-300 uppercase tracking-wider">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Echo Continuous Reflection</span>
+                      </div>
+                      <span className="text-xs bg-amber-500/15 text-amber-200 border border-amber-500/30 px-3 py-0.5 rounded-full font-medium">
+                        Theme: {previousTheme}
                       </span>
                     </div>
-                    <div className="text-sm text-stone-200 leading-relaxed font-serif pl-3 border-l-2 border-amber-500/60">
+
+                    <div className="text-sm text-stone-200 leading-relaxed font-serif pl-3.5 border-l-2 border-amber-500/60">
+                      <Markdown>{msg.text}</Markdown>
+                    </div>
+
+                    {userMessagesCount === 0 && !isSessionEnded && (
+                      <div className="pt-3 flex flex-wrap gap-2.5 border-t border-stone-800/80">
+                        <button
+                          onClick={() => handleSendMessage(`Following up on our prior reflection about "${previousTheme}": `)}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-sm hover:scale-[1.01]"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Continue from "{previousTheme}"</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setInputText("Something new is on my mind today: ");
+                            textareaRef.current?.focus();
+                            adjustTextareaHeight();
+                          }}
+                          className="px-3.5 py-2 bg-stone-800 hover:bg-stone-750 text-stone-300 text-xs rounded-xl transition-colors cursor-pointer"
+                        >
+                          Start fresh topic
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+
+            // Generic Opener Card: Welcoming reflection card for first turn
+            if (isFirstOpener) {
+              return (
+                <div key={msg.id || index} className="w-full my-2 animate-in fade-in duration-300">
+                  <div className="bg-stone-850/70 border border-stone-800 rounded-3xl p-6 space-y-4 shadow-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-stone-300 uppercase tracking-wider">
+                        <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                        <span>Reflection Space</span>
+                      </div>
+                      <span className="text-xs text-stone-400">
+                        {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
+
+                    <div className="text-sm text-stone-200 leading-relaxed font-serif pl-3.5 border-l-2 border-amber-500/50">
                       <Markdown>{msg.text}</Markdown>
                     </div>
                   </div>
@@ -398,6 +500,69 @@ export const JournalChat: React.FC<JournalChatProps> = ({
             );
           })}
 
+          {/* Clickable Quick Reflection Starters when chat has just started */}
+          {userMessagesCount === 0 && !isInitializing && !isSessionEnded && (
+            <div className="space-y-3 pt-2 animate-in fade-in duration-300">
+              <div className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider px-1 flex items-center justify-between">
+                <span>Reflection Starters</span>
+                <span className="text-stone-400 text-[10px] lowercase font-normal">click to start</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {[
+                  {
+                    icon: '🌿',
+                    title: "Headspace & Mood",
+                    description: "Check in with your current mental state",
+                    prompt: "I want to reflect on my headspace and how I'm feeling today."
+                  },
+                  {
+                    icon: '💡',
+                    title: "Untangle a Thought",
+                    description: "Explore a lingering dilemma or decision",
+                    prompt: "There's a thought that's been lingering in my mind that I want to untangle."
+                  },
+                  {
+                    icon: '🎯',
+                    title: "Clarify Priorities",
+                    description: "Define what truly matters right now",
+                    prompt: "I'd like to get clear on my top priorities and what needs my attention."
+                  },
+                  {
+                    icon: '✍️',
+                    title: "Stream of Consciousness",
+                    description: "Freeform uncensored thoughts",
+                    prompt: "Here is a stream of consciousness on what's going on right now: "
+                  }
+                ].map((starter, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      setInputText(starter.prompt);
+                      if (textareaRef.current) {
+                        textareaRef.current.focus();
+                      }
+                      adjustTextareaHeight();
+                    }}
+                    className="p-3.5 bg-stone-850/70 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/40 rounded-2xl text-left transition-all cursor-pointer flex items-start gap-3 group shadow-xs"
+                  >
+                    <span className="text-xl shrink-0 p-1.5 rounded-xl bg-stone-900 border border-stone-800 group-hover:border-amber-500/30 transition-colors">
+                      {starter.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-stone-200 group-hover:text-amber-200 font-semibold flex items-center justify-between">
+                        <span>{starter.title}</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-400 group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      <div className="text-[11px] text-stone-400 line-clamp-1 mt-0.5">
+                        {starter.description}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isSending && (
             <div className="flex flex-col items-start">
               <div className="text-[11px] text-stone-500 font-medium mb-1 px-1 tracking-wider uppercase">
@@ -412,7 +577,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           )}
 
           {/* Persistent End-of-Session Reflection Summary inside conversation stream */}
-          {(endNudge || (isSessionEnded && currentSession?.summary)) && (
+          {(endNudge || (isSessionEnded && currentSession?.summary && !currentSession?.messages?.length)) && (
             <div className="w-full my-4 pt-4 border-t border-stone-800/80">
               <div className="bg-stone-850/90 border border-stone-750 rounded-2xl p-5 shadow-lg relative transition-all space-y-3">
                 {endNudge && (
@@ -455,8 +620,8 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
           {/* Empty state prompt line */}
           {userMessagesCount === 0 && !isInitializing && !previousTheme && (
-            <div className="w-full text-center py-4">
-              <p className="text-[11px] text-stone-500 italic font-serif">
+            <div className="w-full text-center py-2">
+              <p className="text-[11px] text-stone-400 italic font-serif">
                 Today is {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}. This is your private space to reflect, untangle thoughts, or brainstorm.
               </p>
             </div>
@@ -476,7 +641,14 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 <span>This reflection is completed & saved.</span>
               </div>
               <button
-                onClick={() => onStartNewSession()}
+                onClick={() =>
+                  onStartNewSession(
+                    undefined,
+                    currentSession?.extractedTheme
+                      ? `Continuing my reflection on "${currentSession.extractedTheme}": `
+                      : undefined
+                  )
+                }
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm shrink-0"
               >
                 <Sparkles className="w-3.5 h-3.5" />

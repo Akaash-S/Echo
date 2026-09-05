@@ -12,7 +12,8 @@ import {
   Calendar, 
   Award,
   ChevronRight,
-  Plus
+  Plus,
+  MessageSquarePlus
 } from 'lucide-react';
 import { AuthUser, JournalSession } from '../types';
 import { EchoApiClient } from '../lib/api';
@@ -22,7 +23,7 @@ interface ProfileViewProps {
   user: AuthUser;
   onBackToJournal: () => void;
   onSelectSession: (session: JournalSession) => void;
-  onStartNewSession: () => void;
+  onStartNewSession: (prompt?: string) => void;
   onLogout: () => void;
 }
 
@@ -231,18 +232,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div className="bg-stone-850/50 border border-stone-800 rounded-2xl p-5">
               <div className="flex flex-wrap gap-2.5">
                 {uniqueThemes.map(([theme, count], idx) => (
-                  <div
+                  <button
                     key={idx}
-                    className="bg-amber-500/10 text-amber-200 border border-amber-500/25 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-2xs"
+                    onClick={() => {
+                      onStartNewSession(`Continuing our reflection on "${theme}": `);
+                      onBackToJournal();
+                    }}
+                    className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/25 hover:border-amber-500/50 px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-2xs transition-all cursor-pointer group"
+                    title={`Start new reflection conversation on "${theme}"`}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0 group-hover:rotate-12 transition-transform" />
                     <span className="font-medium">{theme}</span>
                     {count > 1 && (
                       <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded-md font-mono">
                         ×{count}
                       </span>
                     )}
-                  </div>
+                    <span className="text-[10px] text-amber-400 opacity-70 group-hover:opacity-100 transition-opacity ml-1">
+                      • Reflect →
+                    </span>
+                  </button>
                 ))}
               </div>
             </div>
@@ -298,7 +307,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       </p>
                     </div>
 
-                    <ChevronRight className="w-4 h-4 text-stone-500 group-hover:text-stone-300 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onStartNewSession(
+                            sess.extractedTheme
+                              ? `Continuing my reflection on "${sess.extractedTheme}": `
+                              : undefined
+                          );
+                          onBackToJournal();
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-stone-800 hover:bg-amber-500/20 text-stone-400 hover:text-amber-300 border border-stone-700 hover:border-amber-500/40 transition-colors text-xs flex items-center gap-1.5 cursor-pointer"
+                        title="Start a new conversation on this reflection"
+                      >
+                        <MessageSquarePlus className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-[11px] hidden sm:inline">Start in new chat</span>
+                      </button>
+                      <ChevronRight className="w-4 h-4 text-stone-500 group-hover:text-stone-300 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                    </div>
                   </div>
                 );
               })

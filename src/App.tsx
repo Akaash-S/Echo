@@ -20,6 +20,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<'journal' | 'profile'>('journal');
   const [currentSession, setCurrentSession] = useState<JournalSession | null>(null);
   const [previousTheme, setPreviousTheme] = useState<string | null>(null);
+  const [initialPrompt, setInitialPrompt] = useState<string | null>(null);
   const [reminderStatus, setReminderStatus] = useState<ReminderStatusResponse | null>(null);
   const [userLocation, setUserLocation] = useState<LocationCoords | null>(null);
   const [isLocationGateOpen, setIsLocationGateOpen] = useState(false);
@@ -113,12 +114,15 @@ export default function App() {
     }
   };
 
-  const startNewSessionWithClient = async (client: EchoApiClient, uid: string, location?: LocationCoords) => {
+  const startNewSessionWithClient = async (client: EchoApiClient, uid: string, location?: LocationCoords, prompt?: string) => {
     // 1. INSTANT ZERO-LATENCY SHELL: Clear old session immediately and mount fresh empty shell
     setActiveView('journal');
     setIsInitializingSession(true);
     setSessionError(null);
     setPreviousTheme(null);
+    if (prompt) {
+      setInitialPrompt(prompt);
+    }
 
     const activeLoc = location || userLocation;
 
@@ -178,11 +182,11 @@ export default function App() {
     }
   };
 
-  const handleStartNewSession = (location?: LocationCoords) => {
+  const handleStartNewSession = (location?: LocationCoords, prompt?: string) => {
     if (apiClient && currentUser) {
       setIsSidebarOpen(false);
       setActiveView('journal');
-      startNewSessionWithClient(apiClient, currentUser.uid, location || userLocation || undefined);
+      startNewSessionWithClient(apiClient, currentUser.uid, location || userLocation || undefined, prompt);
     }
   };
 
@@ -303,6 +307,8 @@ export default function App() {
             reminderStatus={reminderStatus}
             isInitializing={isInitializingSession}
             sessionError={sessionError}
+            initialPrompt={initialPrompt}
+            onClearInitialPrompt={() => setInitialPrompt(null)}
             onSessionUpdated={handleSessionUpdated}
             onEndSessionSuccess={handleEndSessionSuccess}
             onStartNewSession={handleStartNewSession}
@@ -314,7 +320,7 @@ export default function App() {
             user={currentUser}
             onBackToJournal={() => setActiveView('journal')}
             onSelectSession={handleSelectPastSession}
-            onStartNewSession={() => handleStartNewSession()}
+            onStartNewSession={(prompt) => handleStartNewSession(undefined, prompt)}
             onLogout={handleLogout}
           />
         )}
