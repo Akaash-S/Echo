@@ -632,10 +632,10 @@ export const JournalChat: React.FC<JournalChatProps> = ({
       </div>
 
       {/* Bottom Area: Completed Status Bar vs. Active Dynamic Composer */}
-      <div className="border-t border-stone-800/80 bg-stone-900/95 backdrop-blur-md px-4 sm:px-6 py-4 shrink-0">
+      <div className="bg-gradient-to-t from-stone-900 via-stone-900/95 to-transparent px-4 sm:px-6 pt-2 pb-6 shrink-0">
         <div className="max-w-2xl mx-auto">
           {isSessionEnded ? (
-            <div className="flex items-center justify-between gap-4 bg-stone-850/90 border border-stone-750 rounded-2xl p-3 px-4">
+            <div className="flex items-center justify-between gap-4 bg-stone-850/90 border border-stone-750 rounded-2xl p-3 px-4 shadow-lg">
               <div className="flex items-center gap-2 text-xs text-stone-300">
                 <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
                 <span>This reflection is completed & saved.</span>
@@ -661,7 +661,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 e.preventDefault();
                 handleSendMessage();
               }}
-              className="flex items-end gap-2 bg-stone-850 border border-stone-750 focus-within:border-stone-600 rounded-2xl p-2.5 transition-colors"
+              className="flex items-end gap-2.5 bg-stone-850/90 hover:bg-stone-850 border border-stone-750/80 focus-within:border-stone-600 focus-within:bg-stone-850 rounded-2xl p-2.5 sm:p-3 transition-all shadow-lg backdrop-blur-md"
             >
               <textarea
                 ref={textareaRef}
@@ -671,7 +671,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 onKeyDown={handleKeyDown}
                 rows={1}
                 placeholder={isInitializing ? 'Preparing session... you can start typing' : "What's on your mind?"}
-                className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-400 focus:outline-none resize-none px-2 py-1 leading-relaxed max-h-[180px] overflow-hidden"
+                className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-500 focus:outline-none resize-none px-2 py-1 leading-relaxed max-h-[180px] overflow-hidden"
                 style={{ minHeight: '38px' }}
               />
 
@@ -679,9 +679,9 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 type="submit"
                 id="send-message-button"
                 disabled={!inputText.trim() || isSending || isInitializing || !currentSession}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 mb-0.5 ${
                   inputText.trim() && !isSending && !isInitializing && currentSession
-                    ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer'
+                    ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer shadow-xs'
                     : 'bg-stone-800 text-stone-400 cursor-not-allowed opacity-60'
                 }`}
                 title={isInitializing ? 'Connecting to Echo...' : 'Send (Enter)'}
@@ -692,7 +692,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           )}
 
           {!isSessionEnded && (
-            <div className="text-[11px] text-stone-400 text-center mt-2 font-mono">
+            <div className="text-[11px] text-stone-400 text-center mt-2.5 font-mono tracking-wide">
               {isInitializing ? 'Connecting to secure session...' : 'Return to send • Shift + Return for new line'}
             </div>
           )}
