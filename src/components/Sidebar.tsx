@@ -96,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <Loader2 className="w-4 h-4 animate-spin" />
             </div>
           ) : sessions.length === 0 ? (
-            <div className="text-xs text-stone-400 px-2 py-4 italic">
+            <div className="text-xs text-stone-500 px-3 py-6 italic text-center">
               No previous reflections recorded.
             </div>
           ) : (
@@ -106,27 +106,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 month: 'short',
                 day: 'numeric',
               });
+              const summaryExcerpt = sess.summary
+                ? sess.summary.length > 80
+                  ? `${sess.summary.slice(0, 80).trim()}…`
+                  : sess.summary
+                : null;
 
               return (
                 <button
                   key={sess.sessionId}
                   onClick={() => onSelectSession(sess)}
-                  className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors cursor-pointer flex flex-col gap-0.5 ${
+                  className={`w-full text-left p-3 rounded-xl text-xs transition-all cursor-pointer flex flex-col gap-1.5 border group ${
                     isSelected
-                      ? 'bg-stone-850 text-stone-100 font-medium'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                      ? 'bg-stone-850 border-stone-700 text-stone-100 shadow-xs'
+                      : 'bg-transparent border-transparent text-stone-400 hover:text-stone-200 hover:bg-stone-900 hover:border-stone-800/80'
                   }`}
                 >
-                  <div className="flex items-center justify-between w-full">
-                    <span className="text-stone-300 font-mono text-[11px]">{dateStr}</span>
-                    {sess.endedAt && (
-                      <span className="text-[10px] text-stone-400 font-sans">ended</span>
-                    )}
+                  <div className="flex items-center justify-between gap-1 w-full">
+                    <span className="text-stone-300 font-mono text-[11px] font-medium shrink-0">
+                      {dateStr}
+                    </span>
+                    {sess.extractedTheme ? (
+                      <span className="text-[10px] bg-amber-500/10 text-amber-300/90 border border-amber-500/20 px-2 py-0.5 rounded-full font-sans max-w-[130px] truncate font-medium">
+                        {sess.extractedTheme}
+                      </span>
+                    ) : !sess.endedAt ? (
+                      <span className="text-[10px] text-stone-500 font-sans italic flex items-center gap-1 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 animate-pulse" />
+                        In progress
+                      </span>
+                    ) : null}
                   </div>
-                  <div className="truncate text-stone-400 group-hover:text-stone-300 text-[11px]">
-                    {sess.extractedTheme ||
-                      sess.messages?.find((m) => m.role === 'user')?.text ||
-                      'Reflection session'}
+
+                  <div className="text-stone-400 group-hover:text-stone-300 text-[11px] leading-relaxed line-clamp-2">
+                    {summaryExcerpt || (sess.endedAt ? 'Reflection completed' : 'In progress')}
                   </div>
                 </button>
               );

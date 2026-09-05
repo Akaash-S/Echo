@@ -242,12 +242,14 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
           {/* Bug 3: Loading Skeleton for Opening Message while backend resolves */}
           {isInitializing && (!currentSession || currentSession.messages.length === 0) && (
-            <div className="flex flex-col items-start">
-              <div className="text-[11px] text-stone-400 mb-1 px-1">Echo</div>
-              <div className="bg-stone-850/80 border border-stone-800/80 rounded-2xl px-5 py-4 max-w-md flex items-center gap-3">
+            <div className="flex flex-col items-start space-y-2">
+              <div className="text-[11px] text-stone-500 font-medium px-1 tracking-wider uppercase">
+                Echo
+              </div>
+              <div className="bg-stone-850/60 border border-stone-800/80 rounded-2xl px-5 py-4 max-w-md flex items-center gap-3">
                 <Loader2 className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
                 <span className="text-xs text-stone-300">
-                  Echo is preparing your reflection space...
+                  Preparing your reflection space...
                 </span>
               </div>
             </div>
@@ -256,22 +258,46 @@ export const JournalChat: React.FC<JournalChatProps> = ({
           {/* Message Turns */}
           {currentSession?.messages.map((msg, index) => {
             const isUser = msg.role === 'user';
+            const isFirstOpener = index === 0 && !isUser;
+            const isThemedCallback = isFirstOpener && Boolean(previousTheme && previousTheme.trim());
+
+            // 2. Themed Opener Card: Visibly distinct memory callback
+            if (isThemedCallback) {
+              return (
+                <div key={msg.id || index} className="w-full my-2">
+                  <div className="bg-stone-850/80 border border-amber-500/25 rounded-2xl p-5 shadow-xs space-y-3">
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-amber-300/90 tracking-wide uppercase">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Echo remembers</span>
+                      <span className="text-stone-400 normal-case font-normal font-sans">
+                        • from "{previousTheme}"
+                      </span>
+                    </div>
+                    <div className="text-sm text-stone-200 leading-relaxed font-serif">
+                      <Markdown>{msg.text}</Markdown>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // 4. Message Styling: Typography-led with generous whitespace (no loud colored bubbles)
             return (
               <div
                 key={msg.id || index}
-                className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} group`}
+                className={`flex flex-col ${isUser ? 'items-end ml-auto' : 'items-start mr-auto'} max-w-[90%] sm:max-w-[85%]`}
               >
-                {/* Role indicator label */}
-                <div className="text-[11px] text-stone-400 mb-1 px-1">
+                {/* Quiet Role Label */}
+                <div className="text-[11px] text-stone-500 font-medium mb-1.5 px-1 tracking-wider uppercase">
                   {isUser ? 'You' : 'Echo'}
                 </div>
 
-                {/* Message Body */}
+                {/* Turn Body */}
                 <div
                   className={`text-sm leading-relaxed ${
                     isUser
-                      ? 'bg-stone-800 text-stone-100 px-4 py-3 rounded-2xl rounded-tr-sm max-w-[85%] sm:max-w-[80%]'
-                      : 'text-stone-200 px-1 py-1 max-w-full'
+                      ? 'text-stone-100 bg-transparent pl-3 pr-1 py-1 font-normal border-r-2 border-stone-600/80'
+                      : 'text-stone-200 bg-transparent px-1 py-1 font-serif'
                   }`}
                 >
                   {isUser ? (
@@ -288,11 +314,13 @@ export const JournalChat: React.FC<JournalChatProps> = ({
 
           {isSending && (
             <div className="flex flex-col items-start">
-              <div className="text-[11px] text-stone-400 mb-1 px-1">Echo</div>
+              <div className="text-[11px] text-stone-500 font-medium mb-1 px-1 tracking-wider uppercase">
+                Echo
+              </div>
               <div className="flex items-center gap-1.5 text-stone-400 text-xs py-2 px-1">
-                <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-pulse" />
-                <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-pulse [animation-delay:0.2s]" />
-                <span className="w-1.5 h-1.5 bg-stone-400 rounded-full animate-pulse [animation-delay:0.4s]" />
+                <span className="w-1.5 h-1.5 bg-amber-400/80 rounded-full animate-pulse" />
+                <span className="w-1.5 h-1.5 bg-amber-400/80 rounded-full animate-pulse [animation-delay:0.2s]" />
+                <span className="w-1.5 h-1.5 bg-amber-400/80 rounded-full animate-pulse [animation-delay:0.4s]" />
               </div>
             </div>
           )}
@@ -301,41 +329,42 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </div>
       </div>
 
-      {/* End-of-Session Nudge */}
+      {/* 3. End-of-Session Reflection Card: summary + followUpQuestion (dismissible, non-blocking) */}
       {endNudge && (
         <div className="max-w-2xl w-full mx-auto px-4 sm:px-6 mb-3">
-          <div className="bg-stone-850 border border-stone-750 rounded-2xl p-4 shadow-lg relative transition-all">
+          <div className="bg-stone-850 border border-stone-750 rounded-2xl p-5 shadow-lg relative transition-all space-y-3">
             <button
               onClick={() => setEndNudge(null)}
-              className="absolute top-3 right-3 text-stone-400 hover:text-stone-300 p-1 rounded-md"
+              className="absolute top-3.5 right-3.5 text-stone-400 hover:text-stone-200 p-1 rounded-md transition-colors cursor-pointer"
               title="Dismiss"
             >
               <X className="w-4 h-4" />
             </button>
 
-            <div className="text-xs text-amber-300/90 font-medium mb-1 flex items-center gap-1.5">
+            <div className="flex items-center gap-2 text-xs font-medium text-amber-300/90">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <span>Session Concluded</span>
               {endNudge.extractedTheme && (
-                <span className="text-stone-400 text-[11px]">
-                  • {endNudge.extractedTheme}
+                <span className="text-[11px] bg-amber-500/10 text-amber-300/90 border border-amber-500/20 px-2 py-0.5 rounded-full font-sans">
+                  {endNudge.extractedTheme}
                 </span>
               )}
             </div>
 
-            <p className="text-xs text-stone-300 mb-3 leading-relaxed">
+            <p className="text-xs text-stone-300 leading-relaxed">
               {endNudge.summary}
             </p>
 
-            <div className="bg-stone-900/90 border border-stone-800 rounded-xl p-3 mb-3">
-              <div className="text-[11px] text-stone-400 mb-1 font-medium">
-                Ponder for next time:
+            <div className="bg-stone-900/90 border border-stone-800/90 rounded-xl p-3.5">
+              <div className="text-[11px] text-amber-300/80 mb-1 font-medium tracking-wide uppercase">
+                Between now and your next session:
               </div>
-              <div className="text-xs text-stone-200 font-serif italic">
+              <div className="text-xs text-stone-200 font-serif italic leading-relaxed">
                 "{endNudge.followUpQuestion}"
               </div>
             </div>
 
-            <div className="flex items-center gap-2 justify-end">
+            <div className="flex items-center gap-2 justify-end pt-1">
               <button
                 onClick={() => setEndNudge(null)}
                 className="px-3 py-1.5 text-xs text-stone-400 hover:text-stone-200 transition-colors cursor-pointer"
@@ -353,7 +382,16 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         </div>
       )}
 
-      {/* Composer fixed at bottom (Bug 3: Focusable immediately, send enabled when session ready) */}
+      {/* 5. New-Session Calm Prompt Line: date-anchored quiet placeholder before user's first message */}
+      {userMessagesCount === 0 && !isInitializing && !previousTheme && (
+        <div className="max-w-2xl w-full mx-auto px-6 mb-2 text-center">
+          <p className="text-[11px] text-stone-500 italic font-serif">
+            Today is {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}. This is your private space to reflect, untangle thoughts, or brainstorm.
+          </p>
+        </div>
+      )}
+
+      {/* Composer fixed at bottom */}
       <div className="border-t border-stone-800/80 bg-stone-900/95 backdrop-blur-md px-4 sm:px-6 py-4 shrink-0">
         <div className="max-w-2xl mx-auto">
           <form
