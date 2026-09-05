@@ -81,7 +81,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
         textareaRef.current.style.height = `${maxHeight}px`;
         textareaRef.current.style.overflowY = 'auto';
       } else {
-        textareaRef.current.style.height = `${Math.max(scrollHeight, 38)}px`;
+        textareaRef.current.style.height = `${scrollHeight}px`;
         textareaRef.current.style.overflowY = 'hidden';
       }
     }
@@ -99,7 +99,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
     if (customText === undefined) {
       setInputText('');
       if (textareaRef.current) {
-        textareaRef.current.style.height = '38px';
+        textareaRef.current.style.height = 'auto';
         textareaRef.current.style.overflowY = 'hidden';
       }
     }
@@ -661,7 +661,7 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 e.preventDefault();
                 handleSendMessage();
               }}
-              className="flex items-end gap-2.5 bg-stone-850/90 hover:bg-stone-850 border border-stone-750/80 focus-within:border-stone-600 focus-within:bg-stone-850 rounded-2xl p-2.5 sm:p-3 transition-all shadow-lg backdrop-blur-md"
+              className="flex items-center gap-2.5 bg-stone-850/90 hover:bg-stone-850 border border-stone-750/80 focus-within:border-stone-600 focus-within:bg-stone-850 rounded-2xl p-2 pl-4 pr-2 transition-all shadow-lg backdrop-blur-md"
             >
               <textarea
                 ref={textareaRef}
@@ -671,15 +671,14 @@ export const JournalChat: React.FC<JournalChatProps> = ({
                 onKeyDown={handleKeyDown}
                 rows={1}
                 placeholder={isInitializing ? 'Preparing session... you can start typing' : "What's on your mind?"}
-                className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-500 focus:outline-none resize-none px-2 py-1 leading-relaxed max-h-[180px] overflow-hidden"
-                style={{ minHeight: '38px' }}
+                className="flex-1 bg-transparent text-sm text-stone-100 placeholder:text-stone-500 focus:outline-none resize-none py-1.5 px-0 leading-5 max-h-[180px] overflow-hidden"
               />
 
               <button
                 type="submit"
                 id="send-message-button"
                 disabled={!inputText.trim() || isSending || isInitializing || !currentSession}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 mb-0.5 ${
+                className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all shrink-0 ${
                   inputText.trim() && !isSending && !isInitializing && currentSession
                     ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 cursor-pointer shadow-xs'
                     : 'bg-stone-800 text-stone-400 cursor-not-allowed opacity-60'
