@@ -348,10 +348,12 @@ export default function App() {
 
       {/* Settings Modal */}
       <SettingsModal
+        api={apiClient}
         user={currentUser}
         userLocation={userLocation || currentSession?.location || null}
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+        onLocationUpdated={handleLocationAcquired}
       />
     </div>
   );
