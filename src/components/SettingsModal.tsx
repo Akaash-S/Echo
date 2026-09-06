@@ -128,7 +128,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsExporting(true);
     setExportSuccess(false);
     try {
-      const res = await api.getSessions();
+      const res = await api.listSessions();
       const exportPayload = {
         exportedAt: new Date().toISOString(),
         user: {

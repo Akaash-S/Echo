@@ -81,6 +81,10 @@ export class EchoApiClient {
     return this.fetchWithAuth<{ sessions: JournalSession[] }>('/api/sessions');
   }
 
+  async getSessions(): Promise<{ sessions: JournalSession[] }> {
+    return this.listSessions();
+  }
+
   async getSession(sessionId: string): Promise<{ session: JournalSession }> {
     return this.fetchWithAuth<{ session: JournalSession }>(`/api/session/${sessionId}`);
   }
