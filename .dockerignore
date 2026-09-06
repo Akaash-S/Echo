@@ -1,0 +1,10 @@
+node_modules
+__pycache__
+.env
+.env.*
+*.pyc
+.git
+service-account.json
+venv
+docs
+.gemini

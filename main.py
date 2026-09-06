@@ -504,6 +504,26 @@ async def get_admin_metrics(
     return metrics
 
 
+# ---------------------------------------------------------------------------
+# Static Assets & Single Page Application (SPA) Fallback
+# Serves built frontend from 'static' when running in production container
+# ---------------------------------------------------------------------------
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+if os.path.isdir("static"):
+    if os.path.isdir("static/assets"):
+        app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        file_path = os.path.join("static", full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse("static/index.html")
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

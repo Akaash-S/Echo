@@ -23,33 +23,31 @@ _client: Optional[genai.Client] = None
 
 def get_gemini_client() -> genai.Client:
     """
-    Initializes and returns the Google GenAI client, backed by Vertex AI
-    (Gemini Enterprise Agent Platform) rather than the AI Studio API-key path.
-
-    Auth is via Application Default Credentials (ADC) - locally via
-    `gcloud auth application-default login`, and automatically via the
-    attached service account on Cloud Run. Billing is against the GCP
-    project's Cloud Billing account (and any linked trial credit), not
-    the separate AI-Studio "prepay" wallet used by GEMINI_API_KEY.
-
-    Requires GOOGLE_CLOUD_PROJECT (or VERTEX_PROJECT_ID) and, optionally,
-    VERTEX_LOCATION (defaults to us-central1) to be set in the environment.
-    Satisfies Non-Negotiable #1 (no hardcoded secrets) & Non-Negotiable #5 (least privilege).
+    Initializes and returns the Google GenAI client.
+    Supports either GEMINI_API_KEY (e.g. from GCP Secret Manager) or
+    Vertex AI with Application Default Credentials (ADC).
     """
     global _client
     if _client is not None:
         return _client
 
-    project_id = os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT")
-    if not project_id:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="VERTEX_PROJECT_ID (or GOOGLE_CLOUD_PROJECT) environment variable is not configured on the server."
-        )
-    location = os.getenv("VERTEX_LOCATION", "us-central1")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key and api_key.strip():
+        logger.info("Initializing Google GenAI client via GEMINI_API_KEY")
+        _client = genai.Client(api_key=api_key.strip())
+        return _client
 
-    _client = genai.Client(vertexai=True, project=project_id, location=location)
-    return _client
+    project_id = os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("FIREBASE_PROJECT_ID")
+    if project_id:
+        location = os.getenv("VERTEX_LOCATION", "us-central1")
+        logger.info(f"Initializing Google GenAI client via Vertex AI ADC (project={project_id}, location={location})")
+        _client = genai.Client(vertexai=True, project=project_id, location=location)
+        return _client
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Neither GEMINI_API_KEY nor VERTEX_PROJECT_ID/GOOGLE_CLOUD_PROJECT is configured on the server."
+    )
 
 ECHO_SYSTEM_INSTRUCTION = """You are Echo, an empathetic, perceptive, and grounded personal AI journal companion.
 Your purpose is to help the user explore their thoughts, reflect on experiences, structure brainstorms, and untangle complex decisions.
